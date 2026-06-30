@@ -204,7 +204,7 @@ function renderDaySlideContent() {
 
     if (ev.type === 'birthday') {
       const label = (ev.milestone && !hideAgeVal) ? `Happy ${ev.milestone}th Birthday!` : 'Happy Birthday!';
-      messageTitle = `${profileName} 🎂`;
+      messageTitle = `<span class="celebration-clickable-name" onclick="viewProfileFromCelebration('${ev.member.id}')" title="Click to view profile">${profileName}</span> 🎂`;
       messageDesc = `${label} Sending dearest thoughts, warm smiles, and endless blessings from the whole family tree! ❤️`;
       
       decorationHtml = `
@@ -223,7 +223,7 @@ function renderDaySlideContent() {
     } else if (ev.type === 'marriage') {
       const spouseHideAge = ev.spouse ? shouldHideAge(ev.spouse.id) : false;
       const label = (ev.milestone && !hideAgeVal && !spouseHideAge) ? `Happy ${ev.milestone}th Anniversary!` : 'Happy Wedding Anniversary!';
-      messageTitle = `${profileName} 💑`;
+      messageTitle = `<span class="celebration-clickable-name" onclick="viewProfileFromCelebration('${ev.member.id}')" title="Click to view profile">${ev.member.firstName}</span> &amp; <span class="celebration-clickable-name" onclick="viewProfileFromCelebration('${ev.spouse.id}')" title="Click to view profile">${ev.spouse.firstName}</span> 💑`;
       messageDesc = `${label} Wishing a lifetime of love, shared smiles, and warm memories together. Happy Anniversary! 💖`;
       
       decorationHtml = `
@@ -241,7 +241,7 @@ function renderDaySlideContent() {
       }
     } else {
       // Remembrance Deceased Day
-      messageTitle = `Remembering ${ev.member.firstName} 🕊️`;
+      messageTitle = `Remembering <span class="celebration-clickable-name" onclick="viewProfileFromCelebration('${ev.member.id}')" title="Click to view profile">${ev.member.firstName}</span> 🕊️`;
       const milestoneText = (ev.milestone && !hideAgeVal) ? `${ev.milestone}th ` : '';
       messageDesc = `${milestoneText}Memorial Birth Anniversary. Keeping their beautiful life achievements, laughter, and wisdom forever tucked inside our family memory vaults. 🕯️`;
       
@@ -257,7 +257,7 @@ function renderDaySlideContent() {
 
     slide.innerHTML = `
       <span class="slide-tag">${tagLabel}</span>
-      <div class="slide-avatar-ring">
+      <div class="slide-avatar-ring cursor-pointer" onclick="viewProfileFromCelebration('${ev.member.id}')" title="Click to view profile">
         <div class="slide-avatar">${getMemberAvatarHtml(ev.member)}</div>
       </div>
       <h3 class="slide-title cinzel-title">${messageTitle}</h3>
@@ -747,3 +747,11 @@ function createFloatingElement() {
     b.remove();
   });
 }
+
+function viewProfileFromCelebration(memberId) {
+  closeCelebrationPortal();
+  if (typeof openInfoDrawer === 'function') {
+    openInfoDrawer(memberId);
+  }
+}
+

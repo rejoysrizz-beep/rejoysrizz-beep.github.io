@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>YoYoVaYo! - CELEBRATING LIFE</title>
+  <title>YoyoVayo! - CELEBRATING LIFE</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0d0f12">
@@ -80,7 +80,7 @@
       <div class="brand">
         <div class="brand-logo">🌳</div>
         <div class="brand-text">
-          <h1 class="cinzel-title" style="letter-spacing: 1.5px; font-size: 20px;">YoYoVaYo!</h1>
+          <h1 class="cinzel-title" style="letter-spacing: 1.5px; font-size: 20px;">YoyoVayo!</h1>
           <span style="font-size: 10px; font-weight: 700; color: var(--gold); letter-spacing: 2px;">CELEBRATING LIFE</span>
         </div>
       </div>
@@ -97,6 +97,11 @@
         <button class="nav-item" data-tab="gallery">
           <i data-lucide="images"></i>
           <span>Shared Albums</span>
+        </button>
+
+        <button class="nav-item" data-tab="profile">
+          <i data-lucide="user"></i>
+          <span>Member Profile</span>
         </button>
 
         <button class="nav-item" data-tab="settings">
@@ -137,7 +142,7 @@
           </button>
 
           <!-- User session profile badge -->
-          <div id="session-badge" class="session-badge guest">
+          <div id="session-badge" class="session-badge guest hidden">
             <div class="session-avatar" id="session-avatar">👤</div>
             <div class="session-info">
               <span class="session-name" id="session-name">Guest Account</span>
@@ -234,16 +239,15 @@
         <section id="tab-settings" class="tab-pane">
           <div class="pane-header">
             <h2 class="cinzel-title">Backup & Control Center</h2>
-            <p>Export your family tree backup, restore from a previous save, or download XLSX files to test YoYoVaYo!.</p>
+            <p>Export your family tree backup, restore from a previous save, or download XLSX files to test YoyoVayo!.</p>
           </div>
 
           <div class="settings-content">
             <div class="settings-card glass">
               <h3><i data-lucide="database-backup"></i> Backup and Restore</h3>
-              <p>Save your complete family structure (including permissions, notes, and events) into a lightweight JSON file, or export a standard XLSX spreadsheet compatible with Excel or Google Sheets.</p>
+              <p>Save your complete family structure (including permissions, notes, and events) into a lightweight JSON file.</p>
               <div class="settings-actions flex-wrap gap-12">
                 <button class="btn btn-primary" onclick="exportFamilyData()"><i data-lucide="download"></i> Export Family JSON</button>
-                <button class="btn btn-success btn-glow" onclick="exportXlsxFamilyData()"><i data-lucide="file-spreadsheet"></i> Export Family XLSX</button>
                 <label class="btn btn-secondary cursor-pointer">
                   <i data-lucide="upload"></i> Import Backup JSON
                   <input type="file" id="import-file-input" class="hidden-input" onchange="importFamilyData(event)">
@@ -260,10 +264,11 @@
             </div>
 
             <div class="settings-card glass hidden" id="admin-bulk-import-card">
-              <h3><i data-lucide="sheet"></i> Bulk Spreadsheet Importer</h3>
-              <p>Admins can accelerate tree development by entering data in bulk. Download our structured XLSX template (compatible with Microsoft Excel, Google Sheets, or any spreadsheet editor), enter your family records, and import them in a single click.</p>
+              <h3><i data-lucide="sheet"></i> Bulk Spreadsheet Import/Export</h3>
+              <p>Admins can accelerate tree development by entering data in bulk. Download our structured XLSX template (compatible with Microsoft Excel, Google Sheets, or any spreadsheet editor), enter your family records, import them in a single click, or export the entire tree back to XLSX.</p>
               <div class="settings-actions flex-wrap gap-12">
                 <button class="btn btn-primary" onclick="downloadXlsxTemplate()"><i data-lucide="file-spreadsheet"></i> Download XLSX Template</button>
+                <button class="btn btn-success btn-glow" onclick="exportXlsxFamilyData()"><i data-lucide="file-spreadsheet"></i> Export Family XLSX</button>
                 <label class="btn btn-secondary cursor-pointer">
                   <i data-lucide="file-up"></i> Import Spreadsheet XLSX
                   <input type="file" id="bulk-import-file-input" class="hidden-input" accept=".xlsx" onchange="importBulkXlsx(event)">
@@ -273,7 +278,7 @@
 
             <div class="settings-card glass">
               <h3><i data-lucide="shield-check"></i> Role-Based Permissions Help</h3>
-              <p>YoYoVaYo! uses a high-fidelity permission model to govern collaborative editing:</p>
+              <p>YoyoVayo! uses a high-fidelity permission model to govern collaborative editing:</p>
               <div class="permission-help-grid">
                 <div><strong>👑 Super Admin</strong>: The creator of the tree. Complete edit capabilities over everyone, plus exclusive rights to promote other members to Admins via the editing form.</div>
                 <div><strong>🛠️ Admin</strong>: Selected family co-developers. Can edit details, add relationships, and develop the entire tree. Cannot edit the Super Admin or change roles.</div>
@@ -282,6 +287,11 @@
               </div>
             </div>
           </div>
+        </section>
+
+        <!-- 5. MEMBER PROFILE TAB -->
+        <section id="tab-profile" class="tab-pane">
+          <div class="profile-container-wrapper" id="profile-container-wrapper"></div>
         </section>
 
       </div>
@@ -396,17 +406,23 @@
           <p class="form-section-desc">Used for logging in with OTP and sending WhatsApp milestone greetings.</p>
           <div class="form-row-2">
             <div class="form-group">
-              <label for="form-phone">WhatsApp/Phone (with country code)</label>
+              <label for="form-phone">WhatsApp Number</label>
               <input type="tel" id="form-phone" placeholder="e.g. +15551234567">
             </div>
+            <div class="form-group">
+              <label for="form-call-phone">Phone Number (Calling) *</label>
+              <input type="tel" id="form-call-phone" placeholder="e.g. +15551234567 or 00...">
+            </div>
+          </div>
+          <div class="form-row-2 margin-top-8">
             <div class="form-group">
               <label for="form-email">Email Address</label>
               <input type="email" id="form-email" placeholder="e.g. name@email.com">
             </div>
-          </div>
-          <div class="form-group margin-top-8">
-            <label for="form-instagram-id">Instagram Username</label>
-            <input type="text" id="form-instagram-id" placeholder="e.g. john_doe">
+            <div class="form-group">
+              <label for="form-instagram-id">Instagram Username</label>
+              <input type="text" id="form-instagram-id" placeholder="e.g. john_doe">
+            </div>
           </div>
           <div class="form-group margin-top-12">
             <label class="checkbox-container">
@@ -599,8 +615,8 @@
     if ('serviceWorker' in navigator && window.location.protocol !== 'file:') {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('sw.js')
-          .then((reg) => console.log('YoYoVaYo! Service Worker registered with scope:', reg.scope))
-          .catch((err) => console.error('YoYoVaYo! Service Worker registration failed:', err));
+          .then((reg) => console.log('YoyoVayo! Service Worker registered with scope:', reg.scope))
+          .catch((err) => console.error('YoyoVayo! Service Worker registration failed:', err));
       });
     }
   </script>

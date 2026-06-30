@@ -6,10 +6,12 @@
 let familyData = [];
 let currentSession = null; // { memberId: string, name: string, role: string }
 let currentTab = 'tree';
+let activeProfileMemberId = null;
 // Simulated OTP variables removed for local-only instant logins.
 window.treeFocusDropdownNeedsRebuild = true;
 window.pendingImportedMembers = [];
 window.singleAdminToMerge = null;
+window.isPhoneManuallyEdited = false;
 
 // --- CONFIGURATION ---
 const STORAGE_KEY = 'yoyovayo_family_data';
@@ -27,6 +29,17 @@ function safeCreateIcons() {
 }
 window.safeCreateIcons = safeCreateIcons;
 
+function formatInternationalPhone(val) {
+  if (!val) return '';
+  val = val.trim();
+  if (val.startsWith('+') || val.startsWith('00')) {
+    return val;
+  }
+  return '+' + val;
+}
+window.formatInternationalPhone = formatInternationalPhone;
+
+
 // --- ON APPLICATION LOAD ---
 document.addEventListener('DOMContentLoaded', () => {
   // 1. Load Data & Session
@@ -38,6 +51,36 @@ document.addEventListener('DOMContentLoaded', () => {
   initializeTabs();
   updateAuthHeader();
   safeCreateIcons();
+
+  // Programmatic event binding for modal close buttons as a robust fallback
+  document.querySelectorAll('.modal-close').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const parentModal = btn.closest('.modal');
+      if (parentModal) {
+        parentModal.classList.add('hidden');
+      }
+    });
+  });
+
+  // 2.5. Set up dynamic Phone auto-population from WhatsApp input
+  const formPhone = document.getElementById('form-phone');
+  const formCallPhone = document.getElementById('form-call-phone');
+  if (formPhone && formCallPhone) {
+    formPhone.addEventListener('input', () => {
+      if (!window.isPhoneManuallyEdited) {
+        formCallPhone.value = formatInternationalPhone(formPhone.value);
+      }
+    });
+
+    formCallPhone.addEventListener('input', () => {
+      if (formCallPhone.value.trim() === '') {
+        window.isPhoneManuallyEdited = false;
+      } else {
+        window.isPhoneManuallyEdited = true;
+      }
+    });
+  }
 
   // 3. Trigger initial view render
   renderActiveTab();
@@ -289,7 +332,7 @@ function updateAuthHeader() {
     // Enable "Add member" buttons if authorized
     document.querySelectorAll('.hidden-guest').forEach(el => el.classList.remove('hidden'));
 
-    // Toggle bulk importer visibility (only for Admins and Super Admins)
+    // Toggle bulk spreadsheet import/export visibility (only for Admins and Super Admins)
     if (currentSession.role === 'super_admin' || currentSession.role === 'admin') {
       if (bulkCard) bulkCard.classList.remove('hidden');
     } else {
@@ -308,10 +351,22 @@ function updateAuthHeader() {
     // Hide edit options
     document.querySelectorAll('.hidden-guest').forEach(el => el.classList.add('hidden'));
 
-    // Hide bulk importer
+    // Hide bulk spreadsheet import/export
     if (bulkCard) bulkCard.classList.add('hidden');
   }
+  syncSessionBadgeVisibility();
   safeCreateIcons();
+}
+
+function syncSessionBadgeVisibility() {
+  const sessionBadge = document.getElementById('session-badge');
+  if (sessionBadge) {
+    if (currentTab === 'settings') {
+      sessionBadge.classList.remove('hidden');
+    } else {
+      sessionBadge.classList.add('hidden');
+    }
+  }
 }
 
 // =================================================================
@@ -325,6 +380,7 @@ function openAddMemberModal(relationType = null, relationSourceId = null) {
     : 'Establish a new family member in the root grid.';
 
   document.getElementById('member-form').reset();
+  window.isPhoneManuallyEdited = false;
   document.getElementById('form-member-id').value = '';
   document.getElementById('form-relation-type').value = relationType || '';
   document.getElementById('form-relation-source-id').value = relationSourceId || '';
@@ -408,7 +464,14 @@ function openEditMemberModal(memberId) {
   document.getElementById('form-birth-date').value = member.birthDate || '';
   document.getElementById('form-death-date').value = member.deathDate || '';
   document.getElementById('form-phone').value = member.phone || '';
+  document.getElementById('form-call-phone').value = member.callPhone || '';
   document.getElementById('form-email').value = member.email || '';
+  
+  if (member.callPhone && member.callPhone !== formatInternationalPhone(member.phone || '')) {
+    window.isPhoneManuallyEdited = true;
+  } else {
+    window.isPhoneManuallyEdited = false;
+  }
   document.getElementById('form-notes').value = member.notes || '';
   document.getElementById('form-avatar-url').value = member.avatarUrl || '';
   document.getElementById('form-instagram-id').value = member.instagramId || '';
@@ -491,6 +554,13 @@ function handleMemberFormSubmit(e) {
 
   const isDeceased = document.getElementById('form-is-deceased').checked;
 
+  const callPhoneValForCheck = isDeceased ? '' : document.getElementById('form-call-phone').value.trim();
+  if (callPhoneValForCheck && !callPhoneValForCheck.startsWith('+') && !callPhoneValForCheck.startsWith('00')) {
+    showGenericAlert('Aborted: Calling Phone Number must strictly start with "+" or "00".', 'danger');
+    document.getElementById('form-call-phone').focus();
+    return;
+  }
+
   const memberObj = {
     id: id || 'member_' + Date.now() + Math.random().toString(36).substr(2, 5),
     firstName: document.getElementById('form-first-name').value.trim(),
@@ -501,6 +571,7 @@ function handleMemberFormSubmit(e) {
     birthDate: document.getElementById('form-birth-date').value,
     deathDate: isDeceased ? document.getElementById('form-death-date').value : '',
     phone: isDeceased ? '' : document.getElementById('form-phone').value.trim(),
+    callPhone: isDeceased ? '' : document.getElementById('form-call-phone').value.trim(),
     email: isDeceased ? '' : document.getElementById('form-email').value.trim(),
     notes: document.getElementById('form-notes').value.trim(),
     avatarUrl: document.getElementById('form-avatar-url').value.trim(),
@@ -848,11 +919,10 @@ function copyGreetingToClipboard() {
 
 function launchWhatsAppGreeting() {
   const text = document.getElementById('greeting-message-body').value;
-  let phone = activeGreetingRecipient.phone.replace(/[^0-9+]/g, ''); // strip letters/spaces
-
-  // Ensure country code is set, default to US/Global click logic
-  if (!phone.startsWith('+')) {
-    phone = '+' + phone; // fallback
+  // strip all non-numeric characters (including '+')
+  let phone = activeGreetingRecipient.phone.replace(/[^0-9]/g, '');
+  if (phone.startsWith('00')) {
+    phone = phone.substring(2);
   }
 
   const encoded = encodeURIComponent(text);
@@ -890,7 +960,10 @@ function renderActiveTab() {
     renderEventsTimeline();
   } else if (currentTab === 'gallery') {
     renderSharedAlbums();
+  } else if (currentTab === 'profile') {
+    renderFullUserProfilePage();
   }
+  syncSessionBadgeVisibility();
 }
 
 // --- RENDERING EVENT CALENDAR TAB ---
@@ -1067,23 +1140,14 @@ function handleGlobalSearch(val) {
       resultsContainer.classList.add('hidden');
       document.getElementById('global-search').value = '';
       
-      // Navigate to tree tab and highlight node
+      // Navigate to profile tab directly
       document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
-      const treeBtn = document.querySelector('.nav-item[data-tab="tree"]');
-      if (treeBtn) treeBtn.classList.add('active');
+      const profileBtn = document.querySelector('.nav-item[data-tab="profile"]');
+      if (profileBtn) profileBtn.classList.add('active');
       
-      currentTab = 'tree';
+      activeProfileMemberId = m.id;
+      currentTab = 'profile';
       renderActiveTab();
-      
-      // Set the branch focus on that person, display the branch (zoom-to-fit), and open the profile details
-      if (typeof isolateTreeBranch === 'function') {
-        isolateTreeBranch(m.id);
-        if (typeof openInfoDrawer === 'function') {
-          openInfoDrawer(m.id);
-        }
-      } else if (typeof focusOnTreeCard === 'function') {
-        focusOnTreeCard(m.id);
-      }
     };
 
     div.innerHTML = `
@@ -1136,7 +1200,7 @@ function exportXlsxFamilyData() {
 
   const headers = [
     'ID', 'First Name', 'Last Name', 'Nickname', 'Gender', 'Is Deceased',
-    'Birth Date', 'Death Date', 'Phone', 'Email', 'Biography Notes',
+    'Birth Date', 'Death Date', 'Phone', 'Calling Phone', 'Email', 'Biography Notes',
     'Avatar URL', 'Instagram ID', 'Hide Age', 'Hide Contact Details',
     'Father ID', 'Mother ID', 'Spouse ID', 'Marriage Date', 'System Role'
   ];
@@ -1151,9 +1215,10 @@ function exportXlsxFamilyData() {
       String(m.nickname || ''),
       String(m.gender || 'Male'),
       m.isDeceased ? 'TRUE' : 'FALSE',
-      String(m.birthDate || ''),
-      String(m.deathDate || ''),
+      formatDateToDdMmmYyyy(m.birthDate),
+      formatDateToDdMmmYyyy(m.deathDate),
       m.phone ? String(m.phone) : '',
+      m.callPhone ? String(m.callPhone) : '',
       String(m.email || ''),
       String(m.notes || ''),
       String(m.avatarUrl || ''),
@@ -1163,7 +1228,7 @@ function exportXlsxFamilyData() {
       String(m.fatherId || ''),
       String(m.motherId || ''),
       String(m.spouseId || ''),
-      String(m.marriageDate || ''),
+      formatDateToDdMmmYyyy(m.marriageDate),
       String(m.systemRole || 'member')
     ]);
   });
@@ -1261,7 +1326,7 @@ function showEmptyDatabaseWelcome() {
   const welcome = document.createElement('div');
   welcome.className = 'empty-welcome-card glass text-center';
   welcome.innerHTML = `
-    <h2>🌳 Welcome to YoYoVaYo!</h2>
+    <h2>🌳 Welcome to YoyoVayo!</h2>
     <p>Your collaborative family tree database is currently empty.</p>
     <div class="flex flex-wrap gap-12 justify-content-center margin-top-16">
       <button class="btn btn-success btn-glow" onclick="openAddMemberModal()"><i data-lucide="plus-circle"></i> Create First Member (You)</button>
@@ -1454,50 +1519,86 @@ function normalizeDateString(str) {
     return str.replace(/\//g, '-');
   }
 
-  // Convert DD-MM-YYYY or DD/MM/YYYY
-  const parts = str.split(/[-/]/);
+  // Handle dd-mmm-yyyy (e.g. 15-May-1906, 02-dec-1985, etc.)
+  const monthsAbbr = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+  const parts = str.split(/[-/ ]/);
   if (parts.length === 3) {
-    let p0 = parts[0].trim();
-    let p1 = parts[1].trim();
-    let p2 = parts[2].trim();
+    let p0 = parts[0].trim(); // Day
+    let p1 = parts[1].trim().toLowerCase(); // Month index or name
+    let p2 = parts[2].trim(); // Year
 
-    if (p2.length === 4 && !isNaN(p2)) {
-      return `${p2}-${p1.padStart(2, '0')}-${p0.padStart(2, '0')}`;
+    let monthNum = -1;
+    const monthIdx = monthsAbbr.indexOf(p1.slice(0, 3));
+    if (monthIdx !== -1) {
+      monthNum = monthIdx + 1;
+    } else if (!isNaN(p1)) {
+      monthNum = parseInt(p1, 10);
     }
-    if (p0.length === 4 && !isNaN(p0)) {
-      return `${p0}-${p1.padStart(2, '0')}-${p2.padStart(2, '0')}`;
+
+    if (monthNum >= 1 && monthNum <= 12) {
+      if (p2.length === 4 && !isNaN(p2)) {
+        return `${p2}-${String(monthNum).padStart(2, '0')}-${p0.padStart(2, '0')}`;
+      }
+      if (p0.length === 4 && !isNaN(p0)) {
+        return `${p0}-${String(monthNum).padStart(2, '0')}-${p2.padStart(2, '0')}`;
+      }
+    } else {
+      let p1Num = parseInt(p1, 10);
+      if (!isNaN(p1Num)) {
+        if (p2.length === 4 && !isNaN(p2)) {
+          return `${p2}-${p1.padStart(2, '0')}-${p0.padStart(2, '0')}`;
+        }
+        if (p0.length === 4 && !isNaN(p0)) {
+          return `${p0}-${p1.padStart(2, '0')}-${p2.padStart(2, '0')}`;
+        }
+      }
     }
   }
   return str;
 }
 
+function formatDateToDdMmmYyyy(dateStr) {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    const year = parts[0];
+    const monthIndex = parseInt(parts[1], 10) - 1;
+    const day = parts[2];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    if (monthIndex >= 0 && monthIndex < 12 && !isNaN(parseInt(day, 10)) && !isNaN(parseInt(year, 10))) {
+      return `${day.padStart(2, '0')}-${months[monthIndex]}-${year}`;
+    }
+  }
+  return dateStr;
+}
+
 // =================================================================
-// BULK SPREADSHEET IMPORTER CONTROLLERS (XLSX PARSING VIA SHEETJS)
+// BULK SPREADSHEET IMPORT/EXPORT CONTROLLERS (XLSX PARSING VIA SHEETJS)
 // =================================================================
 
 function downloadXlsxTemplate() {
   const headers = [
     'ID', 'First Name', 'Last Name', 'Nickname', 'Gender', 'Is Deceased',
-    'Birth Date', 'Death Date', 'Phone', 'Email', 'Biography Notes',
+    'Birth Date', 'Death Date', 'Phone', 'Calling Phone', 'Email', 'Biography Notes',
     'Father ID', 'Mother ID', 'Spouse ID', 'Marriage Date', 'System Role'
   ];
 
   const sampleRows = [
     [
       'grandpa_sam', 'Samuel', 'Smith', 'Sam', 'Male', 'FALSE',
-      '1945-06-15', '', '919496123778', 'samuel@smith.com',
+      '15-Jun-1945', '', '919496123778', '+919496123778', 'samuel@smith.com',
       'The root grandfather of our family tree. Enthusiastic gardener, loved woodcarving.',
-      '', '', '', '1970-10-10', 'super_admin'
+      '', '', '', '10-Oct-1970', 'super_admin'
     ],
     [
       'grandma_mary', 'Mary', 'Smith', 'Nana', 'Female', 'FALSE',
-      '1950-11-22', '', '+15559876543', 'mary@smith.com',
+      '22-Nov-1950', '', '+15559876543', '+15559876543', 'mary@smith.com',
       'Beloved grandmother. Master baker of apple pies and avid reader.',
-      '', '', 'grandpa_sam', '1970-10-10', 'member'
+      '', '', 'grandpa_sam', '10-Oct-1970', 'member'
     ],
     [
       'son_john', 'John', 'Smith', 'Johnny', 'Male', 'FALSE',
-      '1975-04-12', '', '+15551112222', 'johnny@smith.com',
+      '12-Apr-1975', '', '+15551112222', '+15551112222', 'johnny@smith.com',
       'Enjoys fly fishing and mentoring junior developers.',
       'grandpa_sam', 'grandma_mary', '', '', 'member'
     ]
@@ -1635,6 +1736,12 @@ function importBulkXlsx(event) {
           birthDate: normalizeDateString(String(cleanRec['birthdate'] || cleanRec['birth'] || cleanRec['dob'] || '')),
           deathDate: isDeceased ? normalizeDateString(String(cleanRec['deathdate'] || cleanRec['death'] || cleanRec['dod'] || '')) : '',
           phone: isDeceased ? '' : String(cleanRec['phone'] || cleanRec['whatsapp'] || cleanRec['contact'] || '').trim(),
+          callPhone: isDeceased ? '' : (() => {
+            const rawCall = String(cleanRec['callingphone'] || cleanRec['callphone'] || cleanRec['phonecalling'] || cleanRec['voicecall'] || cleanRec['voicecalling'] || cleanRec['phonecall'] || '').trim();
+            if (rawCall) return rawCall;
+            const rawPhone = String(cleanRec['phone'] || cleanRec['whatsapp'] || cleanRec['contact'] || '').trim();
+            return formatInternationalPhone(rawPhone);
+          })(),
           email: isDeceased ? '' : String(cleanRec['email'] || cleanRec['mail'] || '').trim(),
           notes: String(cleanRec['biographynotes'] || cleanRec['notes'] || cleanRec['bio'] || cleanRec['biography'] || cleanRec['story'] || '').trim(),
           avatarUrl: String(cleanRec['avatarurl'] || '').trim(),
@@ -2059,5 +2166,491 @@ function deleteSharedAlbum(id) {
     saveAlbumsToStorage();
     renderSharedAlbums();
     showGenericAlert('Album link deleted.', 'success');
+  }
+}
+
+// =================================================================
+// MEMBER PROFILE TAB CONTROLLER & ROUTING
+// =================================================================
+
+function parseDateToYYYYMMDD(dateStr) {
+  if (!dateStr) return '';
+  const normalized = normalizeDateString(dateStr);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    return normalized;
+  }
+  return '';
+}
+
+function getSiblings(member) {
+  if (!member) return [];
+  const siblingsMap = new Map();
+  familyData.forEach(m => {
+    if (m.id === member.id) return;
+    const shareFather = member.fatherId && m.fatherId && member.fatherId === m.fatherId;
+    const shareMother = member.motherId && m.motherId && member.motherId === m.motherId;
+    if (shareFather || shareMother) {
+      siblingsMap.set(m.id, m);
+    }
+  });
+  return Array.from(siblingsMap.values());
+}
+
+function sortSiblings(siblings) {
+  return siblings.sort((a, b) => {
+    const getTimestamp = (dateStr) => {
+      if (!dateStr) return null;
+      const normalized = normalizeDateString(dateStr);
+      const birth = new Date(normalized);
+      return isNaN(birth.getTime()) ? null : birth.getTime();
+    };
+    
+    const timeA = getTimestamp(a.birthDate);
+    const timeB = getTimestamp(b.birthDate);
+    
+    if (timeA !== null && timeB !== null) {
+      return timeA - timeB; // Earliest birth timestamp first (oldest first)
+    }
+    if (timeA !== null) return -1;
+    if (timeB !== null) return 1;
+    
+    const nameA = `${a.firstName} ${a.lastName}`.toLowerCase();
+    const nameB = `${b.firstName} ${b.lastName}`.toLowerCase();
+    return nameA.localeCompare(nameB);
+  });
+}
+
+function renderFullUserProfilePage() {
+  const container = document.getElementById('profile-container-wrapper');
+  if (!container) return;
+
+  let member = familyData.find(m => m.id === activeProfileMemberId);
+  if (!member) {
+    if (currentSession && currentSession.memberId) {
+      member = familyData.find(m => m.id === currentSession.memberId);
+    }
+    if (!member && familyData.length > 0) {
+      member = familyData[0];
+    }
+  }
+
+  if (!member) {
+    container.innerHTML = `
+      <div class="empty-profile-state text-center p-48" style="margin-top: 64px;">
+        <div style="font-size: 48px; margin-bottom: 16px;">👤</div>
+        <h3 class="cinzel-title">No Profiles in Tree</h3>
+        <p class="color-dim">Add members to the family tree to view profiles.</p>
+        <button class="btn btn-primary btn-glow margin-top-16" onclick="openAddMemberModal()">
+          <i data-lucide="plus"></i> Add First Member
+        </button>
+      </div>
+    `;
+    safeCreateIcons();
+    return;
+  }
+
+  // Update active tracking ID
+  activeProfileMemberId = member.id;
+
+  // 1. Resolve Siblings
+  const siblings = sortSiblings(getSiblings(member));
+  const allChildren = sortSiblings([...siblings, member]);
+  const myIndex = allChildren.findIndex(m => m.id === member.id);
+
+  const elders = allChildren.slice(0, myIndex); // Eldest first (farthest left)
+  const youngers = allChildren.slice(myIndex + 1); // Youngest last (farthest right)
+
+  // 2. Resolve Primary Relations
+  const father = member.fatherId ? familyData.find(m => m.id === member.fatherId) : null;
+  const mother = member.motherId ? familyData.find(m => m.id === member.motherId) : null;
+  const spouse = member.spouseId ? familyData.find(m => m.id === member.spouseId) : null;
+  const children = sortSiblings(familyData.filter(m => m.fatherId === member.id || m.motherId === member.id));
+
+  // 3. Render Navigation Arrows
+  let leftNavHtml = '';
+  if (myIndex > 0) {
+    const sib = allChildren[myIndex - 1];
+    leftNavHtml = `
+      <button class="profile-nav-arrow-subtle" onclick="navigateToSibling('${sib.id}', 'left')" title="Slide to elder sibling: ${sib.firstName}">
+        <i data-lucide="chevron-left"></i>
+      </button>
+    `;
+  }
+
+  let rightNavHtml = '';
+  if (myIndex < allChildren.length - 1) {
+    const sib = allChildren[myIndex + 1];
+    rightNavHtml = `
+      <button class="profile-nav-arrow-subtle" onclick="navigateToSibling('${sib.id}', 'right')" title="Slide to younger sibling: ${sib.firstName}">
+        <i data-lucide="chevron-right"></i>
+      </button>
+    `;
+  }
+
+  // 4. Calculate Age & Zodiac
+  const age = shouldHideAge(member.id) ? null : calculateAge(member.birthDate);
+  const zodiac = member.birthDate ? getZodiacSign(member.birthDate) : null;
+
+  // 5. Gather Contact Info
+  let contactHtml = '';
+  const isContactsHidden = shouldHideContacts(member.id);
+  const showContacts = !member.isDeceased && !isContactsHidden && (member.phone || member.email || member.instagramId);
+
+  if (member.isDeceased) {
+    contactHtml = `<div class="p-16 text-center color-dim font-style-italic font-size-13">This individual is deceased. No active contact information is listed.</div>`;
+  } else if (isContactsHidden) {
+    contactHtml = `
+      <div class="p-16 text-center color-dim font-style-italic font-size-13" style="display: flex; align-items: center; justify-content: center; gap: 6px;">
+        <i data-lucide="eye-off" style="width: 14px; height: 14px;"></i>
+        Contact details are kept private by this member.
+      </div>
+    `;
+  } else if (!member.phone && !member.email && !member.instagramId) {
+    contactHtml = `<div class="p-16 text-center color-dim font-style-italic font-size-13">No contact details are recorded for this family member.</div>`;
+  } else {
+    contactHtml = '<div class="profile-contact-list">';
+    
+    if (member.phone || member.callPhone) {
+      contactHtml += '<div class="profile-contact-row">';
+      if (member.phone) {
+        contactHtml += `
+          <div class="profile-contact-item" onclick="openGreetingPortal('${member.id}', 'general')">
+            <div class="contact-icon-bg bg-whatsapp"><i data-lucide="message-circle"></i></div>
+            <div class="contact-data">
+              <span class="contact-label">WhatsApp Number</span>
+              <span class="contact-val">${member.phone}</span>
+            </div>
+            <div class="contact-action-btn" title="Send WhatsApp Message"><i data-lucide="chevron-right"></i></div>
+          </div>
+        `;
+      }
+      if (member.callPhone) {
+        contactHtml += `
+          <div class="profile-contact-item" onclick="window.open('tel:${member.callPhone}', '_self')">
+            <div class="contact-icon-bg bg-call"><i data-lucide="phone"></i></div>
+            <div class="contact-data">
+              <span class="contact-label">Voice Call</span>
+              <span class="contact-val">${member.callPhone}</span>
+            </div>
+            <div class="contact-action-btn" title="Place Voice Call"><i data-lucide="chevron-right"></i></div>
+          </div>
+        `;
+      }
+      contactHtml += '</div>';
+    }
+
+    if (member.email) {
+      contactHtml += `
+        <div class="profile-contact-item" onclick="window.open('mailto:${member.email}', '_blank')">
+          <div class="contact-icon-bg bg-email"><i data-lucide="mail"></i></div>
+          <div class="contact-data">
+            <span class="contact-label">Email Address</span>
+            <span class="contact-val">${member.email}</span>
+          </div>
+          <div class="contact-action-btn" title="Send Email"><i data-lucide="chevron-right"></i></div>
+        </div>
+      `;
+    }
+    if (member.instagramId) {
+      contactHtml += '<div class="profile-contact-row">';
+      contactHtml += `
+        <div class="profile-contact-item" onclick="window.open('https://instagram.com/${member.instagramId}', '_blank')">
+          <div class="contact-icon-bg bg-instagram"><i data-lucide="instagram"></i></div>
+          <div class="contact-data">
+            <span class="contact-label">Instagram Username</span>
+            <span class="contact-val">@${member.instagramId}</span>
+          </div>
+          <div class="contact-action-btn" title="View Instagram Profile"><i data-lucide="chevron-right"></i></div>
+        </div>
+      `;
+      contactHtml += `
+        <button class="btn btn-instagram-dm" onclick="window.open('https://instagram.com/direct/t/${member.instagramId}/', '_blank')">
+          <i data-lucide="instagram"></i> <span>Send DM</span>
+        </button>
+      `;
+      contactHtml += '</div>';
+    }
+    contactHtml += '</div>';
+  }
+
+  // 6. Gather Relations List
+  let relationHtml = '';
+  
+  // Section 1: Parents & Spouse
+  let parentsSpouseHtml = '';
+  if (father) {
+    parentsSpouseHtml += `
+      <div class="profile-relation-pill glass" onclick="viewProfileFromRelationship('${father.id}')" title="View Father's profile">
+        <div class="relation-avatar">${getMemberAvatarHtml(father)}</div>
+        <div class="relation-text">
+          <span class="relation-role">Father</span>
+          <span class="relation-name">${father.firstName} ${father.lastName}</span>
+        </div>
+      </div>
+    `;
+  }
+  if (mother) {
+    parentsSpouseHtml += `
+      <div class="profile-relation-pill glass" onclick="viewProfileFromRelationship('${mother.id}')" title="View Mother's profile">
+        <div class="relation-avatar">${getMemberAvatarHtml(mother)}</div>
+        <div class="relation-text">
+          <span class="relation-role">Mother</span>
+          <span class="relation-name">${mother.firstName} ${mother.lastName}</span>
+        </div>
+      </div>
+    `;
+  }
+  if (spouse) {
+    parentsSpouseHtml += `
+      <div class="profile-relation-pill glass" onclick="viewProfileFromRelationship('${spouse.id}')" title="View Spouse's profile">
+        <div class="relation-avatar">${getMemberAvatarHtml(spouse)}</div>
+        <div class="relation-text">
+          <span class="relation-role">Spouse</span>
+          <span class="relation-name">${spouse.firstName} ${spouse.lastName}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  // Section 2: Siblings
+  let siblingsHtml = '';
+  siblings.forEach(sib => {
+    siblingsHtml += `
+      <div class="profile-relation-pill glass" onclick="viewProfileFromRelationship('${sib.id}')" title="View Sibling's profile">
+        <div class="relation-avatar">${getMemberAvatarHtml(sib)}</div>
+        <div class="relation-text">
+          <span class="relation-role">Sibling</span>
+          <span class="relation-name">${sib.firstName} ${sib.lastName}</span>
+        </div>
+      </div>
+    `;
+  });
+
+  // Section 3: Children
+  let childrenHtml = '';
+  children.forEach(child => {
+    childrenHtml += `
+      <div class="profile-relation-pill glass" onclick="viewProfileFromRelationship('${child.id}')" title="View Child's profile">
+        <div class="relation-avatar">${getMemberAvatarHtml(child)}</div>
+        <div class="relation-text">
+          <span class="relation-role">Child</span>
+          <span class="relation-name">${child.firstName} ${child.lastName}</span>
+        </div>
+      </div>
+    `;
+  });
+
+  // Assemble the 3 sections
+  let relationSections = [];
+  if (parentsSpouseHtml) {
+    relationSections.push(`
+      <div class="relationship-subsection">
+        <h4 class="relationship-subsection-title"><i data-lucide="heart"></i> Parents & Spouse</h4>
+        <div class="profile-relation-grid">${parentsSpouseHtml}</div>
+      </div>
+    `);
+  }
+  if (siblingsHtml) {
+    relationSections.push(`
+      <div class="relationship-subsection">
+        <h4 class="relationship-subsection-title"><i data-lucide="users"></i> Siblings</h4>
+        <div class="profile-relation-grid">${siblingsHtml}</div>
+      </div>
+    `);
+  }
+  if (childrenHtml) {
+    relationSections.push(`
+      <div class="relationship-subsection">
+        <h4 class="relationship-subsection-title"><i data-lucide="baby"></i> Children</h4>
+        <div class="profile-relation-grid">${childrenHtml}</div>
+      </div>
+    `);
+  }
+
+  if (relationSections.length === 0) {
+    relationHtml = `<p class="color-dim font-style-italic font-size-13 p-12 text-center" style="margin: 0; width: 100%;">No parent, spouse, sibling, or children relationships have been entered yet.</p>`;
+  } else {
+    relationHtml = `<div class="profile-relationships-container">${relationSections.join('')}</div>`;
+  }
+
+  // 7. Security and Administrative Roles
+  let roleBadgeClass = 'member';
+  let roleLabel = 'Family Member';
+  if (member.systemRole === 'super_admin') {
+    roleBadgeClass = 'super-admin';
+    roleLabel = '👑 Super Admin';
+  } else if (member.systemRole === 'admin') {
+    roleBadgeClass = 'admin';
+    roleLabel = '🛠️ Admin Editor';
+  }
+
+  const canModify = canEdit(member.id);
+  let editActionsHtml = '';
+  if (canModify) {
+    editActionsHtml = `
+      <div class="profile-edit-actions">
+        <button class="btn btn-primary" onclick="openEditMemberModal('${member.id}')">
+          <i data-lucide="edit-3"></i> Edit Profile / Contact
+        </button>
+        <div class="form-row-2">
+          <button class="btn btn-secondary" onclick="openAddMemberModal('child', '${member.id}')">
+            <i data-lucide="user-plus"></i> Add Child
+          </button>
+          <button class="btn btn-secondary" onclick="openAddMemberModal('spouse', '${member.id}')">
+            <i data-lucide="heart-handshake"></i> Add Spouse
+          </button>
+        </div>
+        <button class="btn btn-danger" onclick="deleteFamilyMember('${member.id}')">
+          <i data-lucide="trash-2"></i> Delete This Member
+        </button>
+      </div>
+    `;
+  } else {
+    editActionsHtml = `
+      <div class="glass p-12 border-radius-12 font-size-11 color-dim line-height-1.4 text-center">
+        <i data-lucide="shield-alert" style="vertical-align: middle; margin-right: 4px; width: 14px; height: 14px;"></i>
+        ${getPermissionMessage(member.id)}
+      </div>
+    `;
+  }
+
+  // 8. Assemble Page Markup
+  container.innerHTML = `
+    <div class="profile-layout-wrapper">
+      
+      <!-- LEFT NAVIGATION (Elder siblings) -->
+      <div class="profile-nav-area left-nav">${leftNavHtml}</div>
+
+      <!-- CENTER PROFILE CARD -->
+      <div class="profile-center-container">
+        <div class="profile-slide-inner profile-fade-in" id="profile-slide-inner">
+          
+          <!-- Header Profile Card -->
+          <div class="profile-header-card">
+            <div class="profile-avatar-wrapper">
+              <div class="avatar-lg">${getMemberAvatarHtml(member)}</div>
+              ${member.isDeceased ? `<span class="profile-deceased-badge">🕊️</span>` : ''}
+            </div>
+            <div class="profile-header-info">
+              <h2 class="cinzel-title profile-full-name">${member.firstName} ${member.lastName}</h2>
+              ${member.nickname ? `<p class="profile-nickname">"${member.nickname}"</p>` : ''}
+              
+              <div class="profile-meta-tags">
+                <span class="drawer-role-tag ${roleBadgeClass}">${roleLabel}</span>
+                ${member.isDeceased ? `<span class="profile-deceased-tag">In Remembrance</span>` : ''}
+              </div>
+
+              <div class="profile-life-stats">
+                <span>📅 ${getYearRange(member)}</span>
+                ${age !== null ? `<span>• 🎂 ${age} Years Old</span>` : ''}
+                ${zodiac ? `<span>• ✨ ${zodiac}</span>` : ''}
+              </div>
+            </div>
+          </div>
+
+          <!-- Bottom Grid Details -->
+          <div class="profile-details-grid">
+            
+            <!-- Contact Details Card -->
+            <div class="profile-card card-contacts" style="grid-column: span 2;">
+              <h3><i data-lucide="phone"></i> Contact Details</h3>
+              <div class="card-content">
+                ${contactHtml}
+              </div>
+            </div>
+
+            <!-- Relationships Card -->
+            <div class="profile-card card-relationships" style="grid-column: span 2;">
+              <h3><i data-lucide="users"></i> Family Relationships</h3>
+              <div class="card-content">
+                ${relationHtml}
+              </div>
+            </div>
+
+            <!-- Administrative & Actions Card -->
+            <div class="profile-card card-actions" style="grid-column: span 2;">
+              <h3><i data-lucide="shield-check"></i> Actions & Controls</h3>
+              <div class="card-content">
+                <button class="btn btn-focus-action btn-glow" onclick="profileSetAsFocus('${member.id}')">
+                  <i data-lucide="git-branch"></i> Set as Branch Focus (Navigate to Family Tree)
+                </button>
+                <div class="actions-divider"></div>
+                ${editActionsHtml}
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+      </div>
+
+      <!-- RIGHT NAVIGATION (Younger siblings) -->
+      <div class="profile-nav-area right-nav">${rightNavHtml}</div>
+
+    </div>
+  `;
+
+  // Instantiate Lucide icons inside the rendered container
+  safeCreateIcons();
+}
+
+function navigateToSibling(siblingId, direction) {
+  const innerWrapper = document.getElementById('profile-slide-inner');
+  if (!innerWrapper) {
+    activeProfileMemberId = siblingId;
+    renderFullUserProfilePage();
+    return;
+  }
+
+  const exitClass = direction === 'left' ? 'profile-slide-exit-right' : 'profile-slide-exit-left';
+  const enterClass = direction === 'left' ? 'profile-slide-enter-left' : 'profile-slide-enter-right';
+
+  innerWrapper.classList.add(exitClass);
+
+  setTimeout(() => {
+    activeProfileMemberId = siblingId;
+    renderFullUserProfilePage();
+
+    const newInnerWrapper = document.getElementById('profile-slide-inner');
+    if (newInnerWrapper) {
+      newInnerWrapper.classList.add(enterClass);
+      setTimeout(() => {
+        newInnerWrapper.classList.remove(enterClass);
+      }, 350);
+    }
+  }, 350);
+}
+
+function viewProfileFromRelationship(memberId) {
+  const innerWrapper = document.getElementById('profile-slide-inner');
+  if (!innerWrapper) {
+    activeProfileMemberId = memberId;
+    renderFullUserProfilePage();
+    return;
+  }
+
+  // Beautiful quick scale-fade transition for relationship navigations
+  innerWrapper.style.transition = 'opacity 0.2s, transform 0.2s';
+  innerWrapper.style.opacity = '0';
+  innerWrapper.style.transform = 'scale(0.98)';
+
+  setTimeout(() => {
+    activeProfileMemberId = memberId;
+    renderFullUserProfilePage();
+  }, 200);
+}
+
+function profileSetAsFocus(memberId) {
+  // 1. Navigate back to Family Tree
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+  const treeBtn = document.querySelector('.nav-item[data-tab="tree"]');
+  if (treeBtn) treeBtn.classList.add('active');
+
+  currentTab = 'tree';
+  renderActiveTab();
+
+  // 2. Trigger branch focus and isolate the tree branch
+  if (typeof isolateTreeBranch === 'function') {
+    isolateTreeBranch(memberId);
   }
 }

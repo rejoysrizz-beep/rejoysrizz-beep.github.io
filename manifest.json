@@ -1,10 +1,10 @@
 {
-  "name": "YoYoVaYo! CELEBRATING LIFE",
-  "short_name": "YoYoVaYo!",
+  "name": "YoyoVayo! CELEBRATING LIFE",
+  "short_name": "YoyoVayo!",
   "description": "An interactive, ultra-private family tree and milestone portal celebrating life, birthdays, remembrances, and anniversaries.",
   "start_url": "./index.html",
   "id": "./index.html",
-  "display": "standalone",
+  "display": "fullscreen",
   "background_color": "#0d0f12",
   "theme_color": "#0d0f12",
   "orientation": "any",

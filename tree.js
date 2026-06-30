@@ -1,5 +1,5 @@
 // =================================================================
-// YoYoVaYo! FAMILY TREE LAYOUT ENGINE & ZOOMABLE CANVAS
+// YoyoVayo! FAMILY TREE LAYOUT ENGINE & ZOOMABLE CANVAS
 // =================================================================
 
 // --- NAVIGATION & COORDINATE MATRIX ---
@@ -309,7 +309,7 @@ function renderStandardTree() {
     const m = filtered.find(x => x.id === memberId);
     if (!m) return 0;
 
-    const children = filtered.filter(x => x.fatherId === m.id || x.motherId === m.id);
+    const children = sortSiblings(filtered.filter(x => x.fatherId === m.id || x.motherId === m.id));
 
     // If married, count spouse as part of this node's horizontal footprint
     if (m.spouseId && filtered.some(x => x.id === m.spouseId)) {
@@ -340,7 +340,7 @@ function renderStandardTree() {
     const m = filtered.find(x => x.id === memberId);
     if (!m) return;
 
-    const children = filtered.filter(x => x.fatherId === m.id || x.motherId === m.id);
+    const children = sortSiblings(filtered.filter(x => x.fatherId === m.id || x.motherId === m.id));
     const isCouple = m.spouseId && filtered.some(x => x.id === m.spouseId);
 
     if (isCouple) {
@@ -429,6 +429,26 @@ function renderStandardTree() {
 
     globalX += rootWidth + 150; // Distinct space between root trees
   });
+
+  // Dynamically compute max coordinates to auto-resize SVG canvas and container elements
+  let maxCoordX = 4000;
+  let maxCoordY = 2500;
+  Object.values(coords).forEach(c => {
+    if (c.x + CARD_WIDTH + 1500 > maxCoordX) {
+      maxCoordX = c.x + CARD_WIDTH + 1500;
+    }
+    if (c.y + CARD_HEIGHT + 1500 > maxCoordY) {
+      maxCoordY = c.y + CARD_HEIGHT + 1500;
+    }
+  });
+
+  // Resize both the SVG canvas size and the style widths/heights of the containers
+  svg.setAttribute("width", maxCoordX.toString());
+  svg.setAttribute("height", maxCoordY.toString());
+  svg.style.width = `${maxCoordX}px`;
+  svg.style.height = `${maxCoordY}px`;
+  nodeContainer.style.width = `${maxCoordX}px`;
+  nodeContainer.style.height = `${maxCoordY}px`;
 
   // Keep track of marriage midpoints to drop parent lines
   const marriageMidpoints = {};
@@ -615,207 +635,14 @@ function openInfoDrawer(memberId) {
   const member = familyData.find(m => m.id === memberId);
   if (!member) return;
 
-  activeHighlightedCardId = memberId;
+  // Deactivate other tabs and highlight profile sidebar tab
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+  const profileBtn = document.querySelector('.nav-item[data-tab="profile"]');
+  if (profileBtn) profileBtn.classList.add('active');
 
-  // Add visual selection class on tree cards
-  document.querySelectorAll('.family-card').forEach(c => c.classList.remove('active-selected'));
-  const card = document.querySelector(`.family-card[data-id="${memberId}"]`);
-  if (card) card.classList.add('active-selected');
-
-  const drawer = document.getElementById('info-drawer');
-  const content = document.getElementById('drawer-content');
-
-  // Load relation pointers
-  const father = member.fatherId ? familyData.find(m => m.id === member.fatherId) : null;
-  const mother = member.motherId ? familyData.find(m => m.id === member.motherId) : null;
-  const spouse = member.spouseId ? familyData.find(m => m.id === member.spouseId) : null;
-  const children = familyData.filter(m => m.fatherId === memberId || m.motherId === memberId);
-
-  // Parse age or custom milestone notes
-  const age = shouldHideAge(member.id) ? null : calculateAge(member.birthDate);
-  const zodiac = member.birthDate ? getZodiacSign(member.birthDate) : null;
-
-  // Action buttons dynamically loaded
-  const canModify = canEdit(memberId);
-  let editActionsHtml = '';
-  
-  if (canModify) {
-    editActionsHtml = `
-      <button class="btn btn-primary" onclick="openEditMemberModal('${member.id}')" style="width: 100%;">
-        <i data-lucide="edit-3"></i> Edit Profile
-      </button>
-      <div class="form-row-2">
-        <button class="btn btn-secondary" onclick="openAddMemberModal('child', '${member.id}')">
-          <i data-lucide="user-plus"></i> Add Child
-        </button>
-        <button class="btn btn-secondary" onclick="openAddMemberModal('spouse', '${member.id}')">
-          <i data-lucide="heart-handshake"></i> Add Spouse
-        </button>
-      </div>
-      <button class="btn btn-danger" onclick="deleteFamilyMember('${member.id}')" style="width: 100%;">
-        <i data-lucide="trash-2"></i> Delete Member
-      </button>
-    `;
-  } else {
-    editActionsHtml = `
-      <div class="glass p-12 border-radius-12 font-size-11 color-dim line-height-1.4 text-center">
-        ${getPermissionMessage(memberId)}
-      </div>
-    `;
-  }
-
-  // Relations roster list
-  let relationsHtml = '';
-  if (father) {
-    relationsHtml += `
-      <div class="drawer-relation-card" onclick="focusOnTreeCard('${father.id}')">
-        <div class="avatar-sm">${getMemberAvatarHtml(father)}</div>
-        <div class="relation-details">
-          <span class="relation-type">Father</span>
-          <span class="relation-name">${father.firstName} ${father.lastName}</span>
-        </div>
-      </div>
-    `;
-  }
-  if (mother) {
-    relationsHtml += `
-      <div class="drawer-relation-card" onclick="focusOnTreeCard('${mother.id}')">
-        <div class="avatar-sm">${getMemberAvatarHtml(mother)}</div>
-        <div class="relation-details">
-          <span class="relation-type">Mother</span>
-          <span class="relation-name">${mother.firstName} ${mother.lastName}</span>
-        </div>
-      </div>
-    `;
-  }
-  if (spouse) {
-    relationsHtml += `
-      <div class="drawer-relation-card" onclick="focusOnTreeCard('${spouse.id}')">
-        <div class="avatar-sm">${getMemberAvatarHtml(spouse)}</div>
-        <div class="relation-details">
-          <span class="relation-type">Spouse</span>
-          <span class="relation-name">${spouse.firstName} ${spouse.lastName}</span>
-        </div>
-      </div>
-    `;
-  }
-  children.forEach(child => {
-    relationsHtml += `
-      <div class="drawer-relation-card" onclick="focusOnTreeCard('${child.id}')">
-        <div class="avatar-sm">${getMemberAvatarHtml(child)}</div>
-        <div class="relation-details">
-          <span class="relation-type">Child</span>
-          <span class="relation-name">${child.firstName} ${child.lastName}</span>
-        </div>
-      </div>
-    `;
-  });
-
-  if (!relationsHtml) {
-    relationsHtml = `<p class="color-dim font-size-11">No parents, spouse or children recorded.</p>`;
-  }
-
-  // Contact list rows (Show only if available, not deceased, and not hidden)
-  let contactHtml = '';
-  const hasContacts = !member.isDeceased && !shouldHideContacts(member.id) && (member.phone || member.email || member.instagramId);
-  if (hasContacts) {
-    if (member.phone) {
-      contactHtml += `
-        <div class="contact-row" onclick="openGreetingPortal('${member.id}', 'general')">
-          <div class="contact-info-label">
-            <span class="contact-label">WhatsApp Number</span>
-            <span class="contact-value">${member.phone}</span>
-          </div>
-          <i data-lucide="message-circle" title="Click to send WhatsApp Message"></i>
-        </div>
-      `;
-    }
-    if (member.email) {
-      contactHtml += `
-        <div class="contact-row" onclick="window.open('mailto:${member.email}', '_blank')">
-          <div class="contact-info-label">
-            <span class="contact-label">Email Address</span>
-            <span class="contact-value">${member.email}</span>
-          </div>
-          <i data-lucide="mail" style="color: var(--accent-color);" title="Send Email"></i>
-        </div>
-      `;
-    }
-    if (member.instagramId) {
-      contactHtml += `
-        <div class="contact-row" onclick="window.open('https://instagram.com/${member.instagramId}', '_blank')">
-          <div class="contact-info-label">
-            <span class="contact-label">Instagram</span>
-            <span class="contact-value">@${member.instagramId}</span>
-          </div>
-          <i data-lucide="instagram" style="color: var(--pink);" title="View Instagram Profile"></i>
-        </div>
-      `;
-    }
-  }
-
-  // Draw role indicator
-  let roleBadgeClass = 'member';
-  let roleLabel = 'Family Member';
-  if (member.systemRole === 'super_admin') {
-    roleBadgeClass = 'super-admin';
-    roleLabel = '👑 Super Admin';
-  } else if (member.systemRole === 'admin') {
-    roleBadgeClass = 'admin';
-    roleLabel = '🛠️ Admin Editor';
-  }
-
-  // Conditional Instagram DM button rendering (Only if both target and user have handles + target contact info not hidden)
-  let instagramDmBtnHtml = '';
-  const loggedInMember = currentSession ? familyData.find(m => m.id === currentSession.memberId) : null;
-  if (member.instagramId && !shouldHideContacts(member.id) && loggedInMember && loggedInMember.instagramId) {
-    instagramDmBtnHtml = `
-      <button class="btn" onclick="window.open('https://instagram.com/direct/t/${member.instagramId}/', '_blank')" style="background: linear-gradient(135deg, #f9ce34, #ee2a7b, #6228d7); color: white; width: 100%; border: none; font-weight: 600;">
-        <i data-lucide="instagram"></i> Instagram Direct Message
-      </button>
-    `;
-  }
-
-  content.innerHTML = `
-    <div class="drawer-profile">
-      <div class="avatar-lg">${getMemberAvatarHtml(member)}</div>
-      <div>
-        <h3 class="cinzel-title" style="font-size: 20px;">${member.firstName} ${member.lastName}</h3>
-        ${member.nickname ? `<p class="color-dim font-style-italic font-size-13" style="margin-top: 2px;">"${member.nickname}"</p>` : ''}
-      </div>
-      <span class="drawer-role-tag ${roleBadgeClass}">${roleLabel}</span>
-      <div class="font-size-12 color-dim" style="font-weight: 600;">
-        📅 ${getYearRange(member)}
-        ${age !== null ? ` | 🎂 ${age} Years Old` : ''}
-        ${zodiac ? ` | ✨ ${zodiac}` : ''}
-      </div>
-    </div>
-
-    <div class="drawer-sections">
-      ${hasContacts ? `
-      <div class="drawer-section">
-        <h5><i data-lucide="phone"></i> Contact Details</h5>
-        ${contactHtml}
-      </div>
-      ` : ''}
-
-      <div class="drawer-section">
-        <h5><i data-lucide="users"></i> Relationships</h5>
-        ${relationsHtml}
-      </div>
-
-      <div class="drawer-actions">
-        <button class="btn btn-secondary" onclick="isolateTreeBranch('${member.id}')" style="width: 100%;">
-          <i data-lucide="git-branch"></i> Set as Branch Focus
-        </button>
-        ${instagramDmBtnHtml}
-        ${editActionsHtml}
-      </div>
-    </div>
-  `;
-
-  drawer.classList.remove('hidden');
-  safeCreateIcons();
+  activeProfileMemberId = memberId;
+  currentTab = 'profile';
+  renderActiveTab();
 }
 
 function closeInfoDrawer() {
@@ -861,8 +688,8 @@ function focusOnTreeCard(memberId, triggerClick = true) {
  * Highlights relationships when hovering a card node.
  */
 function highlightRelations(memberId, highlight = true) {
-  const opVal = highlight ? '1.0' : '0.5';
-  const widthVal = highlight ? '4px' : '2.5px';
+  const opVal = highlight ? '1.0' : '0.75';
+  const widthVal = highlight ? '5.5px' : '3.5px';
   const shadowColor = highlight ? 'var(--accent-color)' : 'transparent';
 
   // Toggle child connector drop lines
@@ -882,8 +709,8 @@ function highlightRelations(memberId, highlight = true) {
       const spB = m.id < m.spouseId ? m.spouseId : m.id;
       const marriageLine = document.getElementById(`marriage-line-${spA}-${spB}`);
       if (marriageLine) {
-        marriageLine.style.opacity = highlight ? '1.0' : '0.8';
-        marriageLine.style.strokeWidth = highlight ? '3.5px' : '2px';
+        marriageLine.style.opacity = highlight ? '1.0' : '0.85';
+        marriageLine.style.strokeWidth = highlight ? '5px' : '3.2px';
       }
     }
   });
