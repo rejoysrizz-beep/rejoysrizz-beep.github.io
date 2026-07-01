@@ -1046,7 +1046,7 @@ function renderEventsTimeline() {
     : '';
 
   heroContainer.innerHTML = `
-    <div class="hero-card">
+    <div class="hero-card" id="hero-card-el" title="Click to view profile">
       <div class="hero-icon">${heroEvent.emoji}</div>
       <div class="hero-badge">${heroEvent.title}</div>
       <div class="hero-name">${targetName}</div>
@@ -1056,6 +1056,14 @@ function renderEventsTimeline() {
       ${contactButtonHtml}
     </div>
   `;
+
+  const heroCardEl = document.getElementById('hero-card-el');
+  if (heroCardEl) {
+    heroCardEl.onclick = (e) => {
+      if (e.target.closest('button')) return;
+      openInfoDrawer(heroEvent.member.id);
+    };
+  }
 
   // 2. Render Timeline Cards
   upcoming.forEach(ev => {
@@ -1090,6 +1098,10 @@ function renderEventsTimeline() {
     const item = document.createElement('div');
     item.className = 'timeline-card';
     item.setAttribute('data-event-type', ev.type);
+    item.onclick = (e) => {
+      if (e.target.closest('button')) return;
+      openInfoDrawer(ev.member.id);
+    };
 
     const waActionHtml = (ev.member.phone && !hideContactsVal) 
       ? `<button class="btn btn-secondary cursor-pointer" onclick="openGreetingPortal('${ev.member.id}', '${ev.type}')" title="Send WhatsApp greeting">
@@ -1099,7 +1111,7 @@ function renderEventsTimeline() {
 
     item.innerHTML = `
       <div class="timeline-info">
-        <div class="timeline-avatar">${getGenderAvatarEmoji(ev.member.gender, ev.member.isDeceased)}</div>
+        <div class="timeline-avatar">${getMemberAvatarHtml(ev.member)}</div>
         <div>
           <div class="timeline-event-name">${cardName}</div>
           <div class="timeline-desc">${subText}</div>
