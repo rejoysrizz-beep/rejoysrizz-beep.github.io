@@ -233,24 +233,20 @@ h1, h2, h3, h4, h5, h6 {
   filter: drop-shadow(0 0 6px var(--accent-glow));
 }
 
-.sidebar-footer {
-  padding-top: 16px;
-  border-top: 1px solid var(--border-color);
-}
 .btn-celebrate-shortcut {
   width: 100%;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 8px;
   background: linear-gradient(135deg, var(--gold-glow), var(--pink-glow));
   border: 1px solid var(--gold);
   color: var(--text-primary);
   font-family: var(--font-sans);
-  padding: 12px;
+  padding: 6px 10px;
   font-weight: 600;
-  font-size: 13px;
-  border-radius: 12px;
+  font-size: 14px;
+  border-radius: 8px;
   cursor: pointer;
   transition: var(--transition-smooth);
 }
@@ -2083,7 +2079,8 @@ h1, h2, h3, h4, h5, h6 {
     font-size: 0;
     padding: 12px;
   }
-  .btn-celebrate-shortcut span {
+  .btn-celebrate-shortcut .animated-emoji {
+    display: inline-block !important;
     font-size: 18px;
   }
   .events-dashboard {

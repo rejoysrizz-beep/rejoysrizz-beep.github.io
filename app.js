@@ -938,6 +938,7 @@ function launchWhatsAppGreeting() {
 
 function initializeTabs() {
   document.querySelectorAll('.nav-item').forEach(btn => {
+    if (!btn.hasAttribute('data-tab')) return;
     btn.onclick = () => {
       document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
@@ -2518,9 +2519,6 @@ function renderFullUserProfilePage() {
   container.innerHTML = `
     <div class="profile-layout-wrapper">
       
-      <!-- LEFT NAVIGATION (Elder siblings) -->
-      <div class="profile-nav-area left-nav">${leftNavHtml}</div>
-
       <!-- CENTER PROFILE CARD -->
       <div class="profile-center-container">
         <div class="profile-slide-inner profile-fade-in" id="profile-slide-inner">
@@ -2584,14 +2582,53 @@ function renderFullUserProfilePage() {
         </div>
       </div>
 
-      <!-- RIGHT NAVIGATION (Younger siblings) -->
-      <div class="profile-nav-area right-nav">${rightNavHtml}</div>
-
     </div>
   `;
 
   // Instantiate Lucide icons inside the rendered container
   safeCreateIcons();
+
+  // Add swipe gesture listener for side-to-side sibling transitions
+  const layoutWrapper = container.querySelector('.profile-layout-wrapper');
+  if (layoutWrapper) {
+    let startX = 0;
+    let startY = 0;
+    const thresholdX = 50; // minimum horizontal swipe distance
+    const restraintY = 100; // maximum vertical movement allowed to prevent swipe on scroll
+
+    layoutWrapper.addEventListener('touchstart', (e) => {
+      if (e.touches && e.changedTouches && e.changedTouches[0]) {
+        startX = e.changedTouches[0].screenX;
+        startY = e.changedTouches[0].screenY;
+      }
+    }, { passive: true });
+
+    layoutWrapper.addEventListener('touchend', (e) => {
+      if (e.touches && e.changedTouches && e.changedTouches[0]) {
+        const endX = e.changedTouches[0].screenX;
+        const endY = e.changedTouches[0].screenY;
+
+        const diffX = endX - startX;
+        const diffY = endY - startY;
+
+        if (Math.abs(diffX) >= thresholdX && Math.abs(diffY) <= restraintY) {
+          if (diffX < 0) {
+            // Swipe Left -> Mimic Left Arrow click (elder sibling)
+            if (myIndex > 0) {
+              const sib = allChildren[myIndex - 1];
+              navigateToSibling(sib.id, 'left');
+            }
+          } else {
+            // Swipe Right -> Mimic Right Arrow click (younger sibling)
+            if (myIndex < allChildren.length - 1) {
+              const sib = allChildren[myIndex + 1];
+              navigateToSibling(sib.id, 'right');
+            }
+          }
+        }
+      }
+    }, { passive: true });
+  }
 }
 
 function navigateToSibling(siblingId, direction) {
