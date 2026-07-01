@@ -46,6 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadDataFromStorage();
   loadAlbumsFromStorage();
   loadSessionFromStorage();
+  initTheme();
 
   // 2. Initialize UI & Routing
   initializeTabs();
@@ -1447,7 +1448,41 @@ function getFormattedDate() {
   return d.getFullYear() + "_" + (d.getMonth() + 1).toString().padStart(2, '0') + "_" + d.getDate().toString().padStart(2, '0');
 }
 
-// Global Theme toggle
+// Automatic theme initialization based on local time and preferences
+function initTheme() {
+  const savedTheme = localStorage.getItem('yoyovayo_theme_preference');
+  let themeToApply = 'dark-theme';
+
+  if (savedTheme) {
+    themeToApply = savedTheme === 'light' ? 'light-theme' : 'dark-theme';
+  } else {
+    const hour = new Date().getHours();
+    // Night is 18:00 (6 PM) to 06:00 (6 AM)
+    if (hour >= 18 || hour < 6) {
+      themeToApply = 'dark-theme';
+    } else {
+      themeToApply = 'light-theme';
+    }
+  }
+
+  const body = document.body;
+  const sunIcon = document.getElementById('theme-icon-sun');
+  const moonIcon = document.getElementById('theme-icon-moon');
+
+  if (themeToApply === 'light-theme') {
+    body.classList.remove('dark-theme');
+    body.classList.add('light-theme');
+    if (sunIcon) sunIcon.classList.remove('hidden');
+    if (moonIcon) moonIcon.classList.add('hidden');
+  } else {
+    body.classList.remove('light-theme');
+    body.classList.add('dark-theme');
+    if (sunIcon) sunIcon.classList.add('hidden');
+    if (moonIcon) moonIcon.classList.remove('hidden');
+  }
+}
+
+// Global Theme toggle with persistent storage of preference
 function toggleTheme() {
   const body = document.body;
   const sunIcon = document.getElementById('theme-icon-sun');
@@ -1455,12 +1490,14 @@ function toggleTheme() {
 
   if (body.classList.contains('dark-theme')) {
     body.classList.replace('dark-theme', 'light-theme');
-    sunIcon.classList.remove('hidden');
-    moonIcon.classList.add('hidden');
+    if (sunIcon) sunIcon.classList.remove('hidden');
+    if (moonIcon) moonIcon.classList.add('hidden');
+    localStorage.setItem('yoyovayo_theme_preference', 'light');
   } else {
     body.classList.replace('light-theme', 'dark-theme');
-    sunIcon.classList.add('hidden');
-    moonIcon.classList.remove('hidden');
+    if (sunIcon) sunIcon.classList.add('hidden');
+    if (moonIcon) moonIcon.classList.remove('hidden');
+    localStorage.setItem('yoyovayo_theme_preference', 'dark');
   }
 }
 
