@@ -48,6 +48,29 @@ document.addEventListener('DOMContentLoaded', () => {
   loadSessionFromStorage();
   initTheme();
 
+  // Load and apply display preferences
+  if (typeof initMobileSidebarGestures === 'function') {
+    initMobileSidebarGestures();
+  }
+
+  const savedThemePreference = localStorage.getItem('yoyovayo_theme_preference') || 'auto';
+  const settingsThemeSelect = document.getElementById('settings-theme-select');
+  if (settingsThemeSelect) {
+    settingsThemeSelect.value = savedThemePreference;
+  }
+
+  const savedFontScale = localStorage.getItem('yoyovayo_font_scale') || '1.0';
+  const settingsFontSizeSlider = document.getElementById('settings-font-size-slider');
+  if (settingsFontSizeSlider) {
+    settingsFontSizeSlider.value = savedFontScale;
+  }
+  if (typeof applyFontSizeScale === 'function') {
+    applyFontSizeScale(parseFloat(savedFontScale));
+  }
+  if (typeof updateFontSizeLabel === 'function') {
+    updateFontSizeLabel(parseFloat(savedFontScale));
+  }
+
   // 2. Initialize UI & Routing
   initializeTabs();
   updateAuthHeader();
@@ -939,6 +962,13 @@ function launchWhatsAppGreeting() {
 
 function initializeTabs() {
   document.querySelectorAll('.nav-item').forEach(btn => {
+    // Hide mobile menu sidebar on tab clicks if on mobile
+    btn.addEventListener('click', () => {
+      if (window.innerWidth <= 768 && typeof hideMobileSidebar === 'function') {
+        hideMobileSidebar();
+      }
+    });
+
     if (!btn.hasAttribute('data-tab')) return;
     btn.onclick = () => {
       document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
@@ -1450,12 +1480,15 @@ function getFormattedDate() {
 
 // Automatic theme initialization based on local time and preferences
 function initTheme() {
-  const savedTheme = localStorage.getItem('yoyovayo_theme_preference');
+  const savedTheme = localStorage.getItem('yoyovayo_theme_preference') || 'auto';
   let themeToApply = 'dark-theme';
 
-  if (savedTheme) {
-    themeToApply = savedTheme === 'light' ? 'light-theme' : 'dark-theme';
+  if (savedTheme === 'light') {
+    themeToApply = 'light-theme';
+  } else if (savedTheme === 'dark') {
+    themeToApply = 'dark-theme';
   } else {
+    // 'auto' - auto adjust with time of day (Default)
     const hour = new Date().getHours();
     // Night is 18:00 (6 PM) to 06:00 (6 AM)
     if (hour >= 18 || hour < 6) {
@@ -1480,26 +1513,37 @@ function initTheme() {
     if (sunIcon) sunIcon.classList.add('hidden');
     if (moonIcon) moonIcon.classList.remove('hidden');
   }
+
+  // Update settings theme dropdown if it exists in DOM
+  const select = document.getElementById('settings-theme-select');
+  if (select) {
+    select.value = savedTheme;
+  }
 }
+window.initTheme = initTheme;
+
+function changeThemePreference(val) {
+  localStorage.setItem('yoyovayo_theme_preference', val);
+  initTheme();
+}
+window.changeThemePreference = changeThemePreference;
 
 // Global Theme toggle with persistent storage of preference
 function toggleTheme() {
   const body = document.body;
-  const sunIcon = document.getElementById('theme-icon-sun');
-  const moonIcon = document.getElementById('theme-icon-moon');
+  let newTheme = 'dark';
 
   if (body.classList.contains('dark-theme')) {
-    body.classList.replace('dark-theme', 'light-theme');
-    if (sunIcon) sunIcon.classList.remove('hidden');
-    if (moonIcon) moonIcon.classList.add('hidden');
-    localStorage.setItem('yoyovayo_theme_preference', 'light');
+    newTheme = 'light';
   } else {
-    body.classList.replace('light-theme', 'dark-theme');
-    if (sunIcon) sunIcon.classList.add('hidden');
-    if (moonIcon) moonIcon.classList.remove('hidden');
-    localStorage.setItem('yoyovayo_theme_preference', 'dark');
+    newTheme = 'dark';
   }
+
+  localStorage.setItem('yoyovayo_theme_preference', newTheme);
+  initTheme();
 }
+window.toggleTheme = toggleTheme;
+
 
 // Universal Slide Banner Alert trigger
 function showGenericAlert(text, type = 'success') {
@@ -2634,6 +2678,11 @@ function renderFullUserProfilePage() {
     const restraintY = 100; // maximum vertical movement allowed to prevent swipe on scroll
 
     layoutWrapper.addEventListener('touchstart', (e) => {
+      // Ignore if touch starts near the left screen edge (conflict-free swipe-in sidebar)
+      if (e.touches && e.touches[0] && e.touches[0].clientX <= 45) {
+        startX = 0;
+        return;
+      }
       if (e.touches && e.changedTouches && e.changedTouches[0]) {
         startX = e.changedTouches[0].screenX;
         startY = e.changedTouches[0].screenY;
@@ -2641,6 +2690,7 @@ function renderFullUserProfilePage() {
     }, { passive: true });
 
     layoutWrapper.addEventListener('touchend', (e) => {
+      if (startX === 0) return; // Ignore edge swipe-in touches
       if (e.touches && e.changedTouches && e.changedTouches[0]) {
         const endX = e.changedTouches[0].screenX;
         const endY = e.changedTouches[0].screenY;
@@ -2650,16 +2700,16 @@ function renderFullUserProfilePage() {
 
         if (Math.abs(diffX) >= thresholdX && Math.abs(diffY) <= restraintY) {
           if (diffX < 0) {
-            // Swipe Left -> Mimic Left Arrow click (elder sibling)
-            if (myIndex > 0) {
-              const sib = allChildren[myIndex - 1];
-              navigateToSibling(sib.id, 'left');
-            }
-          } else {
-            // Swipe Right -> Mimic Right Arrow click (younger sibling)
+            // Swipe Left -> Mimic Right navigation (slide younger sibling in from the right)
             if (myIndex < allChildren.length - 1) {
               const sib = allChildren[myIndex + 1];
               navigateToSibling(sib.id, 'right');
+            }
+          } else {
+            // Swipe Right -> Mimic Left navigation (slide elder sibling in from the left)
+            if (myIndex > 0) {
+              const sib = allChildren[myIndex - 1];
+              navigateToSibling(sib.id, 'left');
             }
           }
         }
@@ -2728,3 +2778,201 @@ function profileSetAsFocus(memberId) {
     isolateTreeBranch(memberId);
   }
 }
+
+// =================================================================
+// MOBILE SIDEBAR GESTURES & APPEARANCE CONTROLLERS
+// =================================================================
+
+function showMobileSidebar() {
+  const sidebar = document.querySelector('.sidebar');
+  const backdrop = document.getElementById('sidebar-backdrop');
+  if (sidebar) sidebar.classList.add('open');
+  if (backdrop) backdrop.classList.add('active');
+  if (sidebar) sidebar.style.transform = '';
+  if (backdrop) backdrop.style.opacity = '';
+}
+window.showMobileSidebar = showMobileSidebar;
+
+function hideMobileSidebar() {
+  const sidebar = document.querySelector('.sidebar');
+  const backdrop = document.getElementById('sidebar-backdrop');
+  if (sidebar) sidebar.classList.remove('open');
+  if (backdrop) backdrop.classList.remove('active');
+  if (sidebar) sidebar.style.transform = '';
+  if (backdrop) backdrop.style.opacity = '';
+}
+window.hideMobileSidebar = hideMobileSidebar;
+
+function toggleMobileSidebar() {
+  const sidebar = document.querySelector('.sidebar');
+  if (sidebar && sidebar.classList.contains('open')) {
+    hideMobileSidebar();
+  } else {
+    showMobileSidebar();
+  }
+}
+window.toggleMobileSidebar = toggleMobileSidebar;
+
+function initMobileSidebarGestures() {
+  let startX = 0;
+  let startY = 0;
+  let currentX = 0;
+  let currentY = 0;
+  let isDragging = false;
+  let isOpening = false;
+  let isClosing = false;
+  const SIDEBAR_WIDTH = 220; // Matches CSS width
+
+  document.addEventListener('touchstart', (e) => {
+    if (window.innerWidth > 768) return;
+    const touch = e.touches[0];
+    startX = touch.clientX;
+    startY = touch.clientY;
+    currentX = startX;
+    currentY = startY;
+    isDragging = false;
+    isOpening = false;
+    isClosing = false;
+  }, { passive: true });
+
+  document.addEventListener('touchmove', (e) => {
+    if (window.innerWidth > 768) return;
+    const touch = e.touches[0];
+    currentX = touch.clientX;
+    currentY = touch.clientY;
+
+    const diffX = currentX - startX;
+    const diffY = currentY - startY;
+
+    const sidebar = document.querySelector('.sidebar');
+    if (!sidebar) return;
+    const isSidebarOpen = sidebar.classList.contains('open');
+
+    if (!isDragging) {
+      // Ignore scroll gestures, check for clear horizontal movement
+      if (Math.abs(diffX) > 10 && Math.abs(diffX) > Math.abs(diffY)) {
+        if (!isSidebarOpen && startX <= 45 && diffX > 0) {
+          isOpening = true;
+          isDragging = true;
+          sidebar.style.transition = 'none';
+          const backdrop = document.getElementById('sidebar-backdrop');
+          if (backdrop) backdrop.style.transition = 'none';
+        } else if (isSidebarOpen && diffX < 0) {
+          isClosing = true;
+          isDragging = true;
+          sidebar.style.transition = 'none';
+          const backdrop = document.getElementById('sidebar-backdrop');
+          if (backdrop) backdrop.style.transition = 'none';
+        }
+      }
+    }
+
+    if (isDragging) {
+      const backdrop = document.getElementById('sidebar-backdrop');
+      if (isOpening) {
+        const translateX = Math.min(0, -SIDEBAR_WIDTH + diffX);
+        sidebar.style.transform = `translateX(${translateX}px)`;
+        if (backdrop) {
+          const progress = Math.min(1, diffX / SIDEBAR_WIDTH);
+          backdrop.style.opacity = progress;
+          backdrop.style.pointerEvents = 'auto';
+        }
+      } else if (isClosing) {
+        const translateX = Math.max(-SIDEBAR_WIDTH, diffX);
+        sidebar.style.transform = `translateX(${translateX}px)`;
+        if (backdrop) {
+          const progress = Math.min(1, (SIDEBAR_WIDTH + diffX) / SIDEBAR_WIDTH);
+          backdrop.style.opacity = progress;
+        }
+      }
+
+      if (e.cancelable) {
+        e.preventDefault();
+      }
+    }
+  }, { passive: false });
+
+  document.addEventListener('touchend', (e) => {
+    if (window.innerWidth > 768) return;
+    const sidebar = document.querySelector('.sidebar');
+    const backdrop = document.getElementById('sidebar-backdrop');
+
+    if (isDragging) {
+      isDragging = false;
+      if (sidebar) sidebar.style.transition = '';
+      if (backdrop) backdrop.style.transition = '';
+
+      const diffX = currentX - startX;
+      const swipeThreshold = 60;
+
+      if (isOpening) {
+        if (diffX > swipeThreshold) {
+          showMobileSidebar();
+        } else {
+          hideMobileSidebar();
+        }
+      } else if (isClosing) {
+        if (diffX < -swipeThreshold) {
+          hideMobileSidebar();
+        } else {
+          showMobileSidebar();
+        }
+      }
+    }
+
+    isOpening = false;
+    isClosing = false;
+  }, { passive: true });
+}
+window.initMobileSidebarGestures = initMobileSidebarGestures;
+
+function applyFontSizeScale(scale) {
+  let styleEl = document.getElementById('dynamic-font-size-style');
+  if (!styleEl) {
+    styleEl = document.createElement('style');
+    styleEl.id = 'dynamic-font-size-style';
+    document.head.appendChild(styleEl);
+  }
+
+  // Inject beautiful, relative font scaling override rules for key containers
+  styleEl.innerHTML = `
+    body { font-size: ${16 * scale}px !important; }
+    h1, .cinzel-title { font-size: calc(20px * ${scale}) !important; }
+    h2 { font-size: calc(18px * ${scale}) !important; }
+    h3 { font-size: calc(16px * ${scale}) !important; }
+    h4 { font-size: calc(14px * ${scale}) !important; }
+    p, span, label, input, select, textarea, button { font-size: calc(13px * ${scale}) !important; }
+    .nav-item { font-size: calc(14px * ${scale}) !important; }
+    .nav-item i, .nav-item svg { width: calc(18px * ${scale}) !important; height: calc(18px * ${scale}) !important; }
+    .member-name { font-size: calc(15px * ${scale}) !important; }
+    .card-title { font-size: calc(16px * ${scale}) !important; }
+  `;
+}
+window.applyFontSizeScale = applyFontSizeScale;
+
+function updateFontSizeLabel(scale) {
+  const label = document.getElementById('font-size-label-val');
+  if (!label) return;
+
+  if (scale <= 0.85) {
+    label.innerText = 'Small';
+  } else if (scale <= 0.95) {
+    label.innerText = 'Compact';
+  } else if (scale <= 1.05) {
+    label.innerText = 'Medium (Default)';
+  } else if (scale <= 1.15) {
+    label.innerText = 'Large';
+  } else {
+    label.innerText = 'Extra Large';
+  }
+}
+window.updateFontSizeLabel = updateFontSizeLabel;
+
+function handleFontSizeSliderInput(val) {
+  const scale = parseFloat(val);
+  localStorage.setItem('yoyovayo_font_scale', val);
+  applyFontSizeScale(scale);
+  updateFontSizeLabel(scale);
+}
+window.handleFontSizeSliderInput = handleFontSizeSliderInput;
+

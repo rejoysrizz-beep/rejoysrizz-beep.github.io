@@ -2948,3 +2948,102 @@ h1, h2, h3, h4, h5, h6 {
     display: none !important;
   }
 }
+
+/* --- MOBILE MENU SIDEBAR & GESTURES --- */
+.mobile-menu-toggle {
+  display: none;
+}
+
+.sidebar-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  z-index: 999;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.sidebar-backdrop.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Responsiveness overrides for Mobile Viewports (<= 768px) */
+@media (max-width: 768px) {
+  .app-container {
+    grid-template-columns: 1fr !important;
+  }
+  
+  .sidebar {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    bottom: 0 !important;
+    width: 220px !important;
+    height: 100vh !important;
+    transform: translateX(-100%) !important;
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    z-index: 1000 !important;
+    background-color: var(--bg-tertiary) !important;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.5) !important;
+    padding: 16px 12px !important;
+  }
+  
+  .sidebar.open {
+    transform: translateX(0) !important;
+  }
+  
+  .brand-text {
+    display: block !important;
+  }
+  
+  .nav-item span {
+    display: inline-block !important;
+  }
+  
+  .nav-item {
+    padding: 10px 12px !important;
+    justify-content: flex-start !important;
+  }
+  
+  .btn-celebrate-shortcut {
+    font-size: 14px !important;
+    padding: 10px 12px !important;
+  }
+  
+  .btn-celebrate-shortcut .animated-emoji {
+    font-size: 18px !important;
+    margin-right: 0px;
+  }
+  
+  .mobile-menu-toggle {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    cursor: pointer;
+    padding: 8px;
+    margin-right: 8px;
+    border-radius: 6px;
+    transition: background-color 0.2s ease;
+  }
+  
+  .mobile-menu-toggle:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+  }
+  
+  .mobile-menu-toggle i,
+  .mobile-menu-toggle svg {
+    width: 20px;
+    height: 20px;
+  }
+}
+
