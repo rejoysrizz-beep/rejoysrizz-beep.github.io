@@ -1,2 +1,2 @@
 # rejoysrizz-beep.github.io
-YoYoVaYo! is a premium, local-first family tree database and milestone portal. Keep family memories alive with an immersive celebrations flash page for birthdays, wedding anniversaries, and remembrances, custom photo avatars, secure role-based privacy, shared photo albums, and direct Excel XLSX spreadsheet import/export. 1-click import/export.
+YoyoVayo! is a premium, local-first family tree database and milestone portal. Keep family memories alive with an immersive celebrations flash page for birthdays, wedding anniversaries, and remembrances, custom photo avatars, secure role-based privacy, shared photo albums, and direct Excel XLSX spreadsheet import/export. 1-click import/export.
