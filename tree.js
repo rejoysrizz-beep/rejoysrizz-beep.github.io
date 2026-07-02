@@ -12,7 +12,7 @@ let activeHighlightedCardId = null;
 let focusedBranchRootId = null; // Global tracker for isolative branch focusing
 // Layout Grid parameters
 const CARD_WIDTH = 220;
-const CARD_HEIGHT = 120;
+const CARD_HEIGHT = 96;
 const LAYER_HEIGHT = 280; // Vertical gap between generations
 const CARD_GAP_X = 260;    // Horizontal gap between members
 
@@ -22,13 +22,20 @@ function initializeTreeCanvas() {
   const zoomLayer = document.getElementById('zoom-layer');
   if (!container || !zoomLayer) return;
 
-  // Mouse wheel zoom
+  // Track active pointer events for multi-touch (pinch) and robust drag-pan
+  const activePointers = new Map();
+  let lastPointerX = null;
+  let lastPointerY = null;
+  let lastPinchDistance = null;
+  let lastMidX = null;
+  let lastMidY = null;
+
+  // Mouse wheel zoom (Zooms toward mouse pointer)
   container.onwheel = (e) => {
     e.preventDefault();
-    const zoomSpeed = 0.05;
+    const zoomSpeed = 0.08; // Snappy, premium zoom rate
     const oldScale = scale;
     
-    // Zoom toward mouse pointer
     const rect = container.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
@@ -47,29 +54,134 @@ function initializeTreeCanvas() {
     applyCanvasTransform();
   };
 
-  // Pointer drag panning
+  // Pointer down (Grab and hold)
   container.onpointerdown = (e) => {
-    // Only drag on canvas or zoom layer background (not card nodes or empty state card)
-    if (e.target.closest('.family-card') || e.target.closest('.tree-controls') || e.target.closest('.empty-welcome-card')) return;
+    // Only drag on canvas or zoom layer background (not card nodes or empty state cards or controls)
+    if (
+      e.target.closest('.family-card') || 
+      e.target.closest('.tree-controls') || 
+      e.target.closest('.empty-welcome-card') ||
+      e.target.closest('button') ||
+      e.target.closest('input')
+    ) {
+      return;
+    }
     
-    isDragging = true;
+    // Prevent default touch behaviors like scrolling the browser body
+    if (e.pointerType === 'touch') {
+      e.preventDefault();
+    }
+
+    container.style.cursor = 'grabbing';
     container.setPointerCapture(e.pointerId);
-    startX = e.clientX - offsetX;
-    startY = e.clientY - offsetY;
+    activePointers.set(e.pointerId, e);
+
+    if (activePointers.size === 1) {
+      isDragging = true;
+      lastPointerX = e.clientX;
+      lastPointerY = e.clientY;
+    } else if (activePointers.size === 2) {
+      isDragging = false; // Disable single pointer panning when pinching
+      const pointers = [...activePointers.values()];
+      lastPinchDistance = Math.hypot(pointers[0].clientX - pointers[1].clientX, pointers[0].clientY - pointers[1].clientY);
+      lastMidX = (pointers[0].clientX + pointers[1].clientX) / 2;
+      lastMidY = (pointers[0].clientY + pointers[1].clientY) / 2;
+    }
   };
 
+  // Pointer move (Smooth delta pan & pinch-zoom)
   container.onpointermove = (e) => {
-    if (!isDragging) return;
-    offsetX = e.clientX - startX;
-    offsetY = e.clientY - startY;
-    applyCanvasTransform();
+    if (!activePointers.has(e.pointerId)) return;
+    activePointers.set(e.pointerId, e);
+
+    if (activePointers.size === 1 && isDragging) {
+      // Standard single pointer pan using mouse-move deltas
+      const dx = e.clientX - lastPointerX;
+      const dy = e.clientY - lastPointerY;
+      
+      offsetX += dx;
+      offsetY += dy;
+      
+      lastPointerX = e.clientX;
+      lastPointerY = e.clientY;
+      applyCanvasTransform();
+    } else if (activePointers.size === 2) {
+      const pointers = [...activePointers.values()];
+      const p1 = pointers[0];
+      const p2 = pointers[1];
+
+      const curDist = Math.hypot(p1.clientX - p2.clientX, p1.clientY - p2.clientY);
+      const curMidX = (p1.clientX + p2.clientX) / 2;
+      const curMidY = (p1.clientY + p2.clientY) / 2;
+
+      // 1. Dual-finger pan (move canvas as midpoint moves)
+      if (lastMidX !== null && lastMidY !== null) {
+        const dx = curMidX - lastMidX;
+        const dy = curMidY - lastMidY;
+        offsetX += dx;
+        offsetY += dy;
+      }
+
+      // 2. Dual-finger zoom (pinch-zoom centered on fingers' midpoint)
+      if (lastPinchDistance !== null && lastPinchDistance > 0) {
+        const zoomFactor = curDist / lastPinchDistance;
+        const oldScale = scale;
+        
+        // Boundaries: min 0.2, max 2.5
+        scale = Math.min(Math.max(scale * zoomFactor, 0.2), 2.5);
+
+        const rect = container.getBoundingClientRect();
+        const midX = curMidX - rect.left;
+        const midY = curMidY - rect.top;
+
+        const ratio = scale / oldScale;
+        offsetX = midX - (midX - offsetX) * ratio;
+        offsetY = midY - (midY - offsetY) * ratio;
+      }
+
+      lastPinchDistance = curDist;
+      lastMidX = curMidX;
+      lastMidY = curMidY;
+      
+      applyCanvasTransform();
+    }
   };
 
-  container.onpointerup = (e) => {
-    if (!isDragging) return;
-    isDragging = false;
-    container.releasePointerCapture(e.pointerId);
+  // Unified cleanup handler for pointer releases
+  const handlePointerUp = (e) => {
+    if (activePointers.has(e.pointerId)) {
+      activePointers.delete(e.pointerId);
+      try {
+        container.releasePointerCapture(e.pointerId);
+      } catch (err) {}
+    }
+
+    // Restore grab cursor and reset coordinate caches
+    if (activePointers.size === 0) {
+      container.style.cursor = 'grab';
+      isDragging = false;
+      lastPointerX = null;
+      lastPointerY = null;
+      lastPinchDistance = null;
+      lastMidX = null;
+      lastMidY = null;
+    } else if (activePointers.size === 1) {
+      // Seamlessly transition back to 1-finger panning with the remaining pointer
+      isDragging = true;
+      const remainingPointer = [...activePointers.values()][0];
+      lastPointerX = remainingPointer.clientX;
+      lastPointerY = remainingPointer.clientY;
+      lastPinchDistance = null;
+      lastMidX = null;
+      lastMidY = null;
+    }
   };
+
+  // Wire events to the container for robust release handling
+  container.onpointerup = handlePointerUp;
+  container.onpointercancel = handlePointerUp;
+  container.onlostpointercapture = handlePointerUp;
+  container.onpointerleave = handlePointerUp;
 }
 
 function applyCanvasTransform() {
@@ -596,8 +708,6 @@ function renderStandardTree() {
         <div class="gender-dot ${m.gender.toLowerCase()}"></div>
       </div>
       <div class="card-name">${m.firstName} ${m.lastName}</div>
-      ${m.nickname ? `<div class="card-nickname">"${m.nickname}"</div>` : ''}
-      <div class="card-dates">${getYearRange(m)}</div>
     `;
 
     card.onclick = (e) => {
