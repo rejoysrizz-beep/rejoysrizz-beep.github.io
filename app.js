@@ -2801,7 +2801,10 @@ function showMobileSidebar() {
   if (sidebar) sidebar.classList.add('open');
   if (backdrop) backdrop.classList.add('active');
   if (sidebar) sidebar.style.transform = '';
-  if (backdrop) backdrop.style.opacity = '';
+  if (backdrop) {
+    backdrop.style.opacity = '';
+    backdrop.style.pointerEvents = '';
+  }
 }
 window.showMobileSidebar = showMobileSidebar;
 
@@ -2811,7 +2814,10 @@ function hideMobileSidebar() {
   if (sidebar) sidebar.classList.remove('open');
   if (backdrop) backdrop.classList.remove('active');
   if (sidebar) sidebar.style.transform = '';
-  if (backdrop) backdrop.style.opacity = '';
+  if (backdrop) {
+    backdrop.style.opacity = '';
+    backdrop.style.pointerEvents = '';
+  }
 }
 window.hideMobileSidebar = hideMobileSidebar;
 
