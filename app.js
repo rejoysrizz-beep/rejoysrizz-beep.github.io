@@ -109,6 +109,22 @@ document.addEventListener('DOMContentLoaded', () => {
   // 3. Trigger initial view render
   renderActiveTab();
 
+  // 3.5. Initialize PWA Install Button Click Handler
+  const installBtn = document.getElementById('pwa-install-btn');
+  if (installBtn) {
+    if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
+      installBtn.style.display = 'none';
+    }
+    installBtn.addEventListener('click', async () => {
+      if (!window.deferredPrompt) return;
+      window.deferredPrompt.prompt();
+      const { outcome } = await window.deferredPrompt.userChoice;
+      console.log(`User response to the PWA install prompt: ${outcome}`);
+      window.deferredPrompt = null;
+      installBtn.style.display = 'none';
+    });
+  }
+
   // 4. Onboarding check - If database is empty, prompt or automatically log in as Creator (Super Admin)
   if (familyData.length === 0) {
     showEmptyDatabaseWelcome();
@@ -2994,3 +3010,28 @@ function handleFontSizeSliderInput(val) {
 }
 window.handleFontSizeSliderInput = handleFontSizeSliderInput;
 
+// =================================================================
+// PWA COMPANION INSTALLER ("Add to Home")
+// =================================================================
+window.deferredPrompt = null;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  // Prevent Chrome 67 and earlier from automatically showing the prompt
+  e.preventDefault();
+  // Stash the event so it can be triggered later.
+  window.deferredPrompt = e;
+  // Update UI to notify the user they can install the PWA
+  const installBtn = document.getElementById('pwa-install-btn');
+  if (installBtn) {
+    installBtn.style.display = 'flex';
+  }
+});
+
+window.addEventListener('appinstalled', (evt) => {
+  console.log('YoyoVayo! PWA companion was installed successfully.');
+  const installBtn = document.getElementById('pwa-install-btn');
+  if (installBtn) {
+    installBtn.style.display = 'none';
+  }
+  window.deferredPrompt = null;
+});
