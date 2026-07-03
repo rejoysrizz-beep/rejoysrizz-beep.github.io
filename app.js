@@ -110,12 +110,25 @@ document.addEventListener('DOMContentLoaded', () => {
   renderActiveTab();
 
   // 3.5. Initialize PWA Install Button Click Handler
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+
   const installBtn = document.getElementById('pwa-install-btn');
   if (installBtn) {
-    if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
+    if (isStandalone) {
       installBtn.style.display = 'none';
+    } else if (isIOS) {
+      // On iOS, display the install button immediately since beforeinstallprompt is not supported
+      installBtn.style.display = 'flex';
     }
+
     installBtn.addEventListener('click', async () => {
+      if (isIOS) {
+        showIosInstallModal();
+        return;
+      }
+
       if (!window.deferredPrompt) return;
       window.deferredPrompt.prompt();
       const { outcome } = await window.deferredPrompt.userChoice;
@@ -3035,3 +3048,24 @@ window.addEventListener('appinstalled', (evt) => {
   }
   window.deferredPrompt = null;
 });
+
+// iOS PWA Guidance Modal Toggle Handlers
+function showIosInstallModal() {
+  const modal = document.getElementById('ios-install-modal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    if (window.lucide) {
+      window.lucide.createIcons();
+    }
+  }
+}
+
+function closeIosInstallModal() {
+  const modal = document.getElementById('ios-install-modal');
+  if (modal) {
+    modal.classList.add('hidden');
+  }
+}
+
+window.showIosInstallModal = showIosInstallModal;
+window.closeIosInstallModal = closeIosInstallModal;

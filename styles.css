@@ -158,6 +158,8 @@ h1, h2, h3, h4, h5, h6 {
   padding: 12px 10px;
   justify-content: space-between;
   z-index: 10;
+  overflow-y: auto;
+  scrollbar-width: thin;
 }
 
 .brand {
@@ -3063,4 +3065,123 @@ h1, h2, h3, h4, h5, h6 {
     height: 20px;
   }
 }
+
+/* ================================================================= */
+/* iOS PWA INSTALLATION GUIDE MODAL SPECIFICS */
+/* ================================================================= */
+.ios-decor {
+  font-size: 48px;
+  text-align: center;
+  margin-bottom: 12px;
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+.ios-modal-content {
+  max-width: 480px;
+  width: 90%;
+  padding: 32px 24px;
+}
+
+.ios-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 24px;
+  margin-bottom: 24px;
+}
+
+.ios-step {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 16px;
+  border-radius: 12px;
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.ios-step:hover {
+  background: rgba(255, 255, 255, 0.05);
+  transform: translateY(-2px);
+}
+
+.ios-step-number {
+  width: 32px;
+  height: 32px;
+  background: linear-gradient(135deg, var(--gold), #b38600);
+  border-radius: 50%;
+  color: #0d0f12;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 16px;
+  box-shadow: 0 4px 10px rgba(212, 175, 55, 0.3);
+}
+
+.ios-step-text {
+  font-size: 14px;
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+
+.ios-highlight-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 3px 6px;
+  border-radius: 6px;
+  margin: 0 2px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  vertical-align: middle;
+}
+
+.ios-inline-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--gold);
+}
+
+.ios-arrow-connector {
+  display: flex;
+  justify-content: center;
+  color: var(--gold);
+  opacity: 0.5;
+  animation: pulseConnector 2s infinite ease-in-out;
+}
+
+@keyframes pulseConnector {
+  0%, 100% { transform: translateY(0); opacity: 0.3; }
+  50% { transform: translateY(4px); opacity: 0.7; }
+}
+
+.ios-tip-box {
+  display: flex;
+  gap: 12px;
+  background: rgba(212, 175, 55, 0.08);
+  border: 1.5px solid rgba(212, 175, 55, 0.2);
+  padding: 16px;
+  border-radius: 12px;
+  margin-top: 16px;
+}
+
+.ios-tip-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.ios-tip-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
 

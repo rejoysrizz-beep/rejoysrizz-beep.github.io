@@ -115,7 +115,7 @@
         </button>
 
         <!-- PWA INSTALL COMPANION -->
-        <button id="pwa-install-btn" class="nav-item" style="display: none; margin-top: auto; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 12px; color: var(--gold); border-radius: 0;">
+        <button id="pwa-install-btn" class="nav-item" style="display: none; margin-top: 24px; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 12px; color: var(--gold); border-radius: 8px;">
           <i data-lucide="smartphone" style="color: var(--gold);"></i>
           <span style="font-weight: 600;">Add to Home</span>
         </button>
@@ -637,6 +637,56 @@
       <div class="form-actions" style="margin-top: 24px; display: flex; gap: 12px;">
         <button type="button" class="btn btn-secondary" onclick="handleSkipMerge()" style="width: 100%;">Keep as Separate Member</button>
         <button type="button" class="btn btn-primary btn-glow" onclick="executeMerge()" style="width: 100%;">Merge Profiles <i data-lucide="git-merge"></i></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================= -->
+  <!-- MODAL: iOS PWA INSTALLATION GUIDE -->
+  <!-- ================================================================= -->
+  <div id="ios-install-modal" class="modal hidden" onclick="closeIosInstallModal()">
+    <div class="modal-content ios-modal-content glass" onclick="event.stopPropagation()">
+      <button class="modal-close" onclick="closeIosInstallModal()">&times;</button>
+      <div class="ios-decor">📱</div>
+      <h2 class="cinzel-title">Install Companion App</h2>
+      <p class="modal-subtitle">Add YoyoVayo! to your Home Screen for a faster, full-screen, native experience.</p>
+      
+      <div class="ios-steps">
+        <div class="ios-step">
+          <div class="ios-step-number">1</div>
+          <div class="ios-step-text">
+            Tap the <strong>Share</strong> button <span class="ios-highlight-btn"><i data-lucide="share" class="ios-inline-icon"></i></span> at the bottom (iPhone) or top (iPad) of Safari.
+          </div>
+        </div>
+        
+        <div class="ios-arrow-connector">
+          <i data-lucide="chevron-down"></i>
+        </div>
+        
+        <div class="ios-step">
+          <div class="ios-step-number">2</div>
+          <div class="ios-step-text">
+            Scroll down the share sheet and select <strong>Add to Home Screen</strong> <span class="ios-highlight-btn"><i data-lucide="plus-square" class="ios-inline-icon"></i></span>.
+          </div>
+        </div>
+        
+        <div class="ios-arrow-connector">
+          <i data-lucide="chevron-down"></i>
+        </div>
+        
+        <div class="ios-step">
+          <div class="ios-step-number">3</div>
+          <div class="ios-step-text">
+            Tap <strong>Add</strong> in the top-right corner of the confirmation screen.
+          </div>
+        </div>
+      </div>
+      
+      <div class="ios-tip-box">
+        <div class="ios-tip-icon">✨</div>
+        <div class="ios-tip-text">
+          Once added, open YoyoVayo! from your Home Screen to enjoy offline access, smoother tree interactions, and immersive full-screen display.
+        </div>
       </div>
     </div>
   </div>
