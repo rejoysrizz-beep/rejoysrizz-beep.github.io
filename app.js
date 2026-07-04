@@ -178,24 +178,11 @@ function saveDataToStorage() {
 }
 
 function loadSessionFromStorage() {
-  const raw = sessionStorage.getItem(SESSION_KEY);
-  if (raw) {
-    try {
-      currentSession = JSON.parse(raw);
-    } catch (e) {
-      currentSession = null;
-    }
-  } else {
-    currentSession = null; // Guest Mode by default
-  }
+  // Legacy session loader neutralized.
 }
 
 function saveSessionToStorage() {
-  if (currentSession) {
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify(currentSession));
-  } else {
-    sessionStorage.removeItem(SESSION_KEY);
-  }
+  // Legacy session saver neutralized.
 }
 
 // =================================================================
@@ -226,201 +213,148 @@ function getDescendantIds(memberId) {
 }
 
 /**
- * Permission Resolver: Evaluates if the current logged-in session has permissions to edit the target family member.
+ * Permission Resolver: Evaluates if the current application mode is Edit Mode.
  * @param {string} targetMemberId 
  * @returns {boolean}
  */
 function canEdit(targetMemberId) {
-  if (!currentSession) return false; // Guest mode is strictly read-only
-  if (currentSession.role === 'super_admin') return true; // Super admin edits everything
-
-  const targetMember = familyData.find(m => m.id === targetMemberId);
-  if (!targetMember) return false;
-
-  if (currentSession.role === 'admin') {
-    // Admins can edit anything except the Super Admin's details (or self, which is allowed)
-    return targetMember.systemRole !== 'super_admin';
+  if (window.isEditMode === undefined) {
+    window.isEditMode = localStorage.getItem('yoyovayo_edit_mode') !== 'false';
   }
-
-  if (currentSession.role === 'member') {
-    const myId = currentSession.memberId;
-    if (targetMemberId === myId) return true; // Can edit themselves
-    
-    // Can edit spouse (highly convenient for completing anniversaries)
-    const myProfile = familyData.find(m => m.id === myId);
-    if (myProfile && myProfile.spouseId === targetMemberId) return true;
-
-    // Can edit their own direct descendants recursively
-    const myDescendants = getDescendantIds(myId);
-    return myDescendants.has(targetMemberId);
-  }
-
-  return false;
+  return !!window.isEditMode;
 }
 
 /**
  * Returns helper context description about why a member can or cannot edit.
  */
 function getPermissionMessage(targetMemberId) {
-  if (!currentSession) return '🔒 Guest Mode: Please login to edit family details.';
-  if (canEdit(targetMemberId)) return '✍️ You have permission to edit this member.';
-  
-  if (currentSession.role === 'member') {
-    return '🔒 Locked: Regular members can only edit themselves and their direct descendants ("below them" in the tree).';
+  if (!window.isEditMode) {
+    return '🔒 Application Locked';
   }
-  if (currentSession.role === 'admin') {
-    return '🔒 Locked: Admins cannot modify the Super Admin profile.';
-  }
-  return '🔒 Locked: Permission denied.';
+  return '✍️ Edit Mode Unlocked';
 }
 
 // =================================================================
-// SIMULATED OTP LOGIN CONTROLLER
+// APPLICATION MODE & VIEW LOCKING CONTROL
 // =================================================================
 
-function openLoginModal() {
-  document.getElementById('login-modal').classList.remove('hidden');
-  document.getElementById('login-step-member').classList.remove('hidden');
-  filterLoginMembers('');
-}
+window.isEditMode = localStorage.getItem('yoyovayo_edit_mode') !== 'false';
 
-function closeLoginModal() {
-  document.getElementById('login-modal').classList.add('hidden');
-}
-
-function filterLoginMembers(query) {
-  const container = document.getElementById('login-member-results');
-  container.innerHTML = '';
-
-  const queryLower = query.toLowerCase();
-  
-  // Any living family member can log in instantly
-  const candidates = familyData.filter(m => 
-    !m.isDeceased && 
-    (m.firstName.toLowerCase().includes(queryLower) || 
-     m.lastName.toLowerCase().includes(queryLower) ||
-     (m.nickname && m.nickname.toLowerCase().includes(queryLower)))
-  );
-
-  if (candidates.length === 0) {
-    container.innerHTML = `<div class="p-12 text-center color-dim font-size-13">No eligible members found.</div>`;
-    return;
-  }
-
-  candidates.forEach(m => {
-    const row = document.createElement('div');
-    row.className = 'login-member-row';
-    row.onclick = () => loginAsMember(m.id);
-
-    let roleIcon = '👤';
-    if (m.systemRole === 'super_admin') roleIcon = '👑';
-    else if (m.systemRole === 'admin') roleIcon = '🛠️';
-
-    row.innerHTML = `
-      <div class="login-member-left">
-        <div class="login-member-avatar">${getGenderAvatarEmoji(m.gender, m.isDeceased)}</div>
-        <div>
-          <div class="login-member-name">${m.firstName} ${m.lastName} <span class="font-size-12 color-dim">(${roleIcon})</span></div>
-          <div class="font-size-11 color-dim">${m.nickname ? `Also known as: "${m.nickname}"` : 'Family Member'}</div>
-        </div>
-      </div>
-      <span class="login-member-btn">Select</span>
-    `;
-    container.appendChild(row);
-  });
-}
-
-function loginAsMember(memberId) {
-  const member = familyData.find(m => m.id === memberId);
-  if (!member) return;
-
-  currentSession = {
-    memberId: member.id,
-    name: `${member.firstName} ${member.lastName}`,
-    role: member.systemRole || 'member',
-    gender: member.gender
-  };
-  saveSessionToStorage();
-  closeLoginModal();
-  updateAuthHeader();
-  renderActiveTab();
-  
-  showGenericAlert(`Logged in as ${currentSession.name}!`, 'success');
-}
-
-function handleLogout() {
-  currentSession = null;
-  saveSessionToStorage();
-  updateAuthHeader();
-  renderActiveTab();
-  showGenericAlert('Logged out. Reverted to Guest Mode.', 'info');
-}
-
-function updateAuthHeader() {
-  const badge = document.getElementById('session-badge');
-  const avatar = document.getElementById('session-avatar');
-  const nameEl = document.getElementById('session-name');
-  const roleEl = document.getElementById('session-role');
-  const btn = document.getElementById('auth-action-btn');
+function updateEditModeUI() {
+  const badge = document.getElementById('edit-mode-badge');
+  const avatar = document.getElementById('edit-mode-avatar');
+  const nameEl = document.getElementById('edit-mode-status-text');
+  const roleEl = document.getElementById('edit-mode-sub-text');
   const bulkCard = document.getElementById('admin-bulk-import-card');
+  const addMemberBtn = document.getElementById('add-member-btn');
+  
+  // Toggles for the Settings Application Security Card
+  const modeIcon = document.getElementById('settings-mode-icon');
+  const modeTitle = document.getElementById('settings-mode-title');
+  const modeDesc = document.getElementById('settings-mode-desc');
+  const toggleBtn = document.getElementById('toggle-mode-btn');
 
-  // Reset classes
-  badge.className = 'session-badge';
+  // Header circular glassmorphic toggle button
+  const lockBtn = document.getElementById('edit-mode-lock-btn');
+  const lockIcon = document.getElementById('lock-icon');
 
-  if (currentSession) {
-    // Logged In State
-    badge.classList.add(currentSession.role.replace('_', '-'));
-    avatar.innerText = getGenderAvatarEmoji(currentSession.gender, false);
-    nameEl.innerText = currentSession.name;
-    
-    let roleLabel = 'Regular Member';
-    if (currentSession.role === 'super_admin') roleLabel = '👑 Super Admin';
-    else if (currentSession.role === 'admin') roleLabel = '🛠️ Editor Admin';
-    
-    roleEl.innerText = roleLabel;
-    
-    btn.innerHTML = `<i data-lucide="log-out"></i> Logout`;
-    btn.onclick = handleLogout;
-    
-    // Enable "Add member" buttons if authorized
-    document.querySelectorAll('.hidden-guest').forEach(el => el.classList.remove('hidden'));
+  if (window.isEditMode === undefined) {
+    window.isEditMode = localStorage.getItem('yoyovayo_edit_mode') !== 'false';
+  }
 
-    // Toggle bulk spreadsheet import/export visibility (only for Admins and Super Admins)
-    if (currentSession.role === 'super_admin' || currentSession.role === 'admin') {
-      if (bulkCard) bulkCard.classList.remove('hidden');
-    } else {
-      if (bulkCard) bulkCard.classList.add('hidden');
+  if (window.isEditMode) {
+    // Edit mode state
+    if (badge) {
+      badge.className = 'session-badge edit-mode';
     }
+    if (avatar) avatar.innerText = '✍️';
+    if (nameEl) nameEl.innerText = 'Edit Mode';
+    if (roleEl) roleEl.innerText = 'Unlocked';
+
+    if (modeIcon) modeIcon.innerText = '✍️';
+    if (modeTitle) modeTitle.innerText = 'Edit Mode (Unlocked)';
+    if (modeDesc) modeDesc.innerText = 'You have full administrator privileges to modify the family tree.';
+    if (toggleBtn) {
+      toggleBtn.innerText = 'Switch to View Mode';
+      toggleBtn.className = 'btn btn-primary btn-glow';
+    }
+
+    if (lockBtn) {
+      lockBtn.className = 'lock-toggle-btn unlocked';
+      lockBtn.setAttribute('title', 'Switch to View Mode');
+    }
+    if (lockIcon) {
+      lockIcon.setAttribute('data-lucide', 'lock-open');
+    }
+
+    // Show edit options
+    document.querySelectorAll('.hidden-guest').forEach(el => el.classList.remove('hidden'));
+    if (bulkCard) bulkCard.classList.remove('hidden');
+    if (addMemberBtn) addMemberBtn.classList.remove('hidden');
   } else {
-    // Guest State
-    badge.classList.add('guest');
-    avatar.innerText = '👤';
-    nameEl.innerText = 'Guest Account';
-    roleEl.innerText = 'View-Only Mode';
-    
-    btn.innerHTML = `<i data-lucide="log-in"></i> Login`;
-    btn.onclick = openLoginModal;
+    // View mode state
+    if (badge) {
+      badge.className = 'session-badge view-mode';
+    }
+    if (avatar) avatar.innerText = '🔒';
+    if (nameEl) nameEl.innerText = 'View Mode';
+    if (roleEl) roleEl.innerText = 'Locked';
+
+    if (modeIcon) modeIcon.innerText = '🔒';
+    if (modeTitle) modeTitle.innerText = 'View Mode (Locked)';
+    if (modeDesc) modeDesc.innerText = 'The application is currently locked. All modifications are hidden to prevent accidental edits.';
+    if (toggleBtn) {
+      toggleBtn.innerText = 'Switch to Edit Mode';
+      toggleBtn.className = 'btn btn-success btn-glow';
+    }
+
+    if (lockBtn) {
+      lockBtn.className = 'lock-toggle-btn locked';
+      lockBtn.setAttribute('title', 'Switch to Edit Mode');
+    }
+    if (lockIcon) {
+      lockIcon.setAttribute('data-lucide', 'lock');
+    }
 
     // Hide edit options
     document.querySelectorAll('.hidden-guest').forEach(el => el.classList.add('hidden'));
-
-    // Hide bulk spreadsheet import/export
     if (bulkCard) bulkCard.classList.add('hidden');
+    if (addMemberBtn) addMemberBtn.classList.add('hidden');
   }
+  
   syncSessionBadgeVisibility();
   safeCreateIcons();
 }
 
+function toggleEditModeGlobal() {
+  window.isEditMode = !window.isEditMode;
+  localStorage.setItem('yoyovayo_edit_mode', window.isEditMode ? 'true' : 'false');
+  updateEditModeUI();
+  
+  if (window.isEditMode) {
+    showGenericAlert('Application switched to Edit Mode. Modifications are unlocked.', 'success');
+  } else {
+    showGenericAlert('Application locked in View Mode. Modifications are hidden.', 'info');
+  }
+}
+
+function updateAuthHeader() {
+  updateEditModeUI();
+}
+
 function syncSessionBadgeVisibility() {
-  const sessionBadge = document.getElementById('session-badge');
+  const sessionBadge = document.getElementById('edit-mode-badge');
   if (sessionBadge) {
-    if (currentTab === 'settings') {
+    if (currentTab === 'settings' || currentTab === 'tree') {
       sessionBadge.classList.remove('hidden');
     } else {
       sessionBadge.classList.add('hidden');
     }
   }
 }
+
+window.toggleEditModeGlobal = toggleEditModeGlobal;
+window.updateEditModeUI = updateEditModeUI;
 
 // =================================================================
 // CORE DATA MANIPULATION & RELATIONSHIP BINDING (CRUD)
@@ -445,14 +379,7 @@ function openAddMemberModal(relationType = null, relationSourceId = null) {
   // Populate Relation dropdowns with list of everyone in tree
   populateRelationDropdowns();
 
-  // Handle security settings pane - Only Super Admin can promote roles
-  const securitySec = document.getElementById('form-section-security');
-  if (currentSession && currentSession.role === 'super_admin') {
-    securitySec.classList.remove('hidden');
-    document.getElementById('form-system-role').value = 'member';
-  } else {
-    securitySec.classList.add('hidden');
-  }
+  // Security settings section removed.
 
   // If adding linked member, prepopulate parents or spouses to avoid errors
   if (relationType && relationSourceId) {
@@ -538,14 +465,7 @@ function openEditMemberModal(memberId) {
   document.getElementById('form-spouse-id').value = member.spouseId || '';
   document.getElementById('form-marriage-date').value = member.marriageDate || '';
 
-  // Handle security settings dropdown visibility
-  const securitySec = document.getElementById('form-section-security');
-  if (currentSession && currentSession.role === 'super_admin') {
-    securitySec.classList.remove('hidden');
-    document.getElementById('form-system-role').value = member.systemRole || 'member';
-  } else {
-    securitySec.classList.add('hidden');
-  }
+  // Security settings section removed.
 
   // Close info drawer and show edit modal
   closeInfoDrawer();
@@ -635,29 +555,13 @@ function handleMemberFormSubmit(e) {
     motherId: document.getElementById('form-mother-id').value || null,
     spouseId: document.getElementById('form-spouse-id').value || null,
     marriageDate: document.getElementById('form-marriage-date').value || null,
-    systemRole: (currentSession && currentSession.role === 'super_admin') 
-      ? document.getElementById('form-system-role').value 
-      : 'member'
+    systemRole: 'super_admin'
   };
-
-  // If this is the FIRST member created, automatically make them Super Admin!
-  if (familyData.length === 0) {
-    memberObj.systemRole = 'super_admin';
-  }
 
   if (id) {
     // UPDATE MODE
     const idx = familyData.findIndex(m => m.id === id);
     if (idx !== -1) {
-      // Validate that role changes to Super Admin are allowed
-      if (familyData[idx].systemRole === 'super_admin' && memberObj.systemRole !== 'super_admin') {
-        // Trying to demote Super Admin, must confirm there's another super admin or prevent it
-        const supers = familyData.filter(m => m.systemRole === 'super_admin' && m.id !== id);
-        if (supers.length === 0) {
-          showGenericAlert('Aborted: There must be at least one 👑 Super Admin in the system.', 'danger');
-          return;
-        }
-      }
       familyData[idx] = memberObj;
     }
   } else {
@@ -700,6 +604,11 @@ function handleMemberFormSubmit(e) {
   saveDataToStorage();
   window.treeFocusDropdownNeedsRebuild = true;
   closeMemberModal();
+
+  if (typeof expandAncestors === 'function') {
+    expandAncestors(memberObj.id);
+  }
+
   renderActiveTab();
   showGenericAlert(`Successfully saved ${memberObj.firstName}!`, 'success');
 }
@@ -1074,9 +983,16 @@ function renderEventsTimeline() {
        </button>`
     : '';
 
+  const heroMediaHtml = heroEvent.type === 'marriage'
+    ? `<div class="overlapping-avatars-wrapper hero-overlap">
+        <div class="overlap-avatar primary">${getMemberAvatarHtml(heroEvent.member)}</div>
+        <div class="overlap-avatar secondary">${getMemberAvatarHtml(heroEvent.spouse)}</div>
+       </div>`
+    : `<div class="hero-icon">${heroEvent.emoji}</div>`;
+
   heroContainer.innerHTML = `
     <div class="hero-card" id="hero-card-el" title="Click to view profile">
-      <div class="hero-icon">${heroEvent.emoji}</div>
+      ${heroMediaHtml}
       <div class="hero-badge">${heroEvent.title}</div>
       <div class="hero-name">${targetName}</div>
       <div class="hero-countdown">${countdownLabel}</div>
@@ -1138,9 +1054,16 @@ function renderEventsTimeline() {
          </button>`
       : '';
 
+    const avatarHtml = ev.type === 'marriage'
+      ? `<div class="overlapping-avatars-wrapper timeline-overlap">
+          <div class="overlap-avatar primary">${getMemberAvatarHtml(ev.member)}</div>
+          <div class="overlap-avatar secondary">${getMemberAvatarHtml(ev.spouse)}</div>
+         </div>`
+      : `<div class="timeline-avatar">${getMemberAvatarHtml(ev.member)}</div>`;
+
     item.innerHTML = `
       <div class="timeline-info">
-        <div class="timeline-avatar">${getMemberAvatarHtml(ev.member)}</div>
+        ${avatarHtml}
         <div>
           <div class="timeline-event-name">${cardName}</div>
           <div class="timeline-desc">${subText}</div>
@@ -1348,6 +1271,9 @@ function importFamilyData(event) {
       }
       
       saveDataToStorage();
+      if (typeof clearCollapsedStates === 'function') {
+        clearCollapsedStates();
+      }
       window.treeFocusDropdownNeedsRebuild = true;
       saveAlbumsToStorage();
       
@@ -1369,6 +1295,9 @@ function clearFamilyData() {
   if (confirm('⚠️ WARNING: This will completely wipe your family database and shared photo albums! Are you absolutely sure?')) {
     familyData = [];
     saveDataToStorage();
+    if (typeof clearCollapsedStates === 'function') {
+      clearCollapsedStates();
+    }
     sharedAlbums = [];
     saveAlbumsToStorage();
     window.treeFocusDropdownNeedsRebuild = true;
@@ -1401,9 +1330,16 @@ function showEmptyDatabaseWelcome() {
   welcome.innerHTML = `
     <h2>🌳 Welcome to YoyoVayo!</h2>
     <p>Your collaborative family tree database is currently empty.</p>
-    <div class="flex flex-wrap gap-12 justify-content-center margin-top-16">
-      <button class="btn btn-success btn-glow" onclick="openAddMemberModal()"><i data-lucide="plus-circle"></i> Create First Member (You)</button>
-      <button class="btn btn-secondary btn-glow" onclick="document.getElementById('import-file-input').click()"><i data-lucide="upload"></i> Restore from Backup</button>
+    <div class="flex flex-wrap gap-12 justify-content-center margin-top-16" style="display: flex; flex-direction: column; align-items: center; gap: 12px;">
+      <button class="btn btn-success btn-glow" onclick="openAddMemberModal()" style="width: 250px; justify-content: center;"><i data-lucide="plus-circle"></i> Create First Member (You)</button>
+      <button class="btn btn-secondary btn-glow" onclick="document.getElementById('import-file-input').click()" style="width: 250px; justify-content: center;"><i data-lucide="upload"></i> Restore from Backup</button>
+      <button class="btn btn-secondary btn-glow" onclick="revealWelcomeWebRestore()" style="width: 250px; justify-content: center;"><i data-lucide="globe"></i> Restore from Web</button>
+    </div>
+    <div id="welcome-web-restore-container" style="display: none; margin-top: 16px; width: 100%;">
+      <div style="display: flex; gap: 8px; width: 100%; justify-content: center;">
+        <input type="text" id="welcome-web-restore-url" placeholder="https://example.com/family.json" class="form-control" style="flex: 1; padding: 10px; border-radius: 8px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); color: var(--text-primary); font-size: 13px; max-width: 240px;">
+        <button class="btn btn-primary" onclick="submitWelcomeWebRestore()" style="padding: 10px 16px;">Restore</button>
+      </div>
     </div>
   `;
 
@@ -1422,6 +1358,102 @@ function showEmptyDatabaseWelcome() {
 
   safeCreateIcons();
 }
+
+function revealWelcomeWebRestore() {
+  const container = document.getElementById('welcome-web-restore-container');
+  if (container) {
+    container.style.display = container.style.display === 'none' ? 'block' : 'none';
+  }
+}
+
+function submitWelcomeWebRestore() {
+  const input = document.getElementById('welcome-web-restore-url');
+  if (input && input.value) {
+    restoreFromWeb(input.value);
+  } else {
+    showGenericAlert('Please enter a URL.', 'danger');
+  }
+}
+
+function revealWebRestoreSettings() {
+  const container = document.getElementById('web-restore-settings-container');
+  if (container) {
+    container.style.display = container.style.display === 'none' ? 'block' : 'none';
+  }
+}
+
+function submitWebRestoreSettings() {
+  const input = document.getElementById('web-restore-settings-url');
+  if (input && input.value) {
+    restoreFromWeb(input.value);
+  } else {
+    showGenericAlert('Please enter a URL.', 'danger');
+  }
+}
+
+function restoreFromWeb(url) {
+  if (!url) return;
+  url = url.trim();
+  
+  // Extract path to validate extension (strictly accept only .json)
+  let pathname = '';
+  try {
+    pathname = new URL(url).pathname.toLowerCase();
+  } catch (e) {
+    pathname = url.split('?')[0].split('#')[0].toLowerCase();
+  }
+  
+  if (!pathname.endsWith('.json')) {
+    alert("unknown file type");
+    return;
+  }
+
+  fetch(url)
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      return response.json();
+    })
+    .then(parsed => {
+      if (Array.isArray(parsed)) {
+        familyData = parsed;
+        sharedAlbums = [];
+      } else if (parsed && Array.isArray(parsed.familyData)) {
+        familyData = parsed.familyData;
+        sharedAlbums = parsed.sharedAlbums || [];
+      } else {
+        showGenericAlert('Error: Invalid JSON structure.', 'danger');
+        return;
+      }
+      
+      saveDataToStorage();
+      if (typeof clearCollapsedStates === 'function') {
+        clearCollapsedStates();
+      }
+      window.treeFocusDropdownNeedsRebuild = true;
+      saveAlbumsToStorage();
+      
+      // Unlocks edit mode for the fresh restore
+      window.isEditMode = true;
+      localStorage.setItem('yoyovayo_edit_mode', 'true');
+      updateEditModeUI();
+
+      renderActiveTab();
+      showGenericAlert('Web backup restored successfully! Database refreshed.', 'success');
+    })
+    .catch(err => {
+      console.error('Failed to fetch from web:', err);
+      showGenericAlert('Error: Failed to fetch or parse JSON file from URL.', 'danger');
+    });
+}
+
+// Export functions to window so inline HTML onclick calls can access them
+window.revealWelcomeWebRestore = revealWelcomeWebRestore;
+window.submitWelcomeWebRestore = submitWelcomeWebRestore;
+window.revealWebRestoreSettings = revealWebRestoreSettings;
+window.submitWebRestoreSettings = submitWebRestoreSettings;
+window.restoreFromWeb = restoreFromWeb;
 
 // =================================================================
 // HELPER METHODS (DATES, STRINGS, GRAPHICS)
@@ -1923,6 +1955,9 @@ function importBulkXlsx(event) {
       reciprocateSpouseLinks();
 
       saveDataToStorage();
+      if (typeof clearCollapsedStates === 'function') {
+        clearCollapsedStates();
+      }
       renderActiveTab();
       showGenericAlert(`Bulk Import Successful! Added ${addedCount}, updated ${updatedCount} members. All relationships reconciled!`, 'success');
       
@@ -2047,6 +2082,9 @@ function executeMerge() {
 
   window.treeFocusDropdownNeedsRebuild = true;
   saveDataToStorage();
+  if (typeof clearCollapsedStates === 'function') {
+    clearCollapsedStates();
+  }
   updateAuthHeader(); // Update visual header
   renderActiveTab();
 
@@ -2087,6 +2125,9 @@ function handleSkipMerge() {
 
   window.treeFocusDropdownNeedsRebuild = true;
   saveDataToStorage();
+  if (typeof clearCollapsedStates === 'function') {
+    clearCollapsedStates();
+  }
   renderActiveTab();
 
   showGenericAlert(`Bulk Import Successful (No Merge)! Added ${addedCount}, updated ${updatedCount} members. All relationships reconciled.`, 'success');
@@ -2108,25 +2149,11 @@ window.handleSkipMerge = handleSkipMerge;
 // =================================================================
 
 function shouldHideAge(memberId) {
-  const member = familyData.find(m => m.id === memberId);
-  if (!member || !member.hideAge) return false;
-  
-  if (!currentSession) return true; // Guest cannot see secret age
-  if (currentSession.role === 'super_admin' || currentSession.role === 'admin') return false; // Admins can see
-  if (currentSession.memberId === memberId) return false; // Self can see
-  
-  return true; // Other members cannot see
+  return false; // App owner sees all, no multi-user privacy constraints
 }
 
 function shouldHideContacts(memberId) {
-  const member = familyData.find(m => m.id === memberId);
-  if (!member || !member.hideContactDetails) return false;
-  
-  if (!currentSession) return true; // Guest cannot see contact details
-  if (currentSession.role === 'super_admin' || currentSession.role === 'admin') return false; // Admins can see
-  if (currentSession.memberId === memberId) return false; // Self can see
-  
-  return true; // Other members cannot see
+  return false; // App owner sees all, no multi-user privacy constraints
 }
 
 // =================================================================
@@ -2165,7 +2192,7 @@ function renderSharedAlbums() {
 
   const addBtn = document.getElementById('add-album-btn');
   if (addBtn) {
-    if (currentSession && (currentSession.role === 'super_admin' || currentSession.role === 'admin')) {
+    if (canEdit()) {
       addBtn.classList.remove('hidden');
     } else {
       addBtn.classList.add('hidden');
@@ -2203,9 +2230,9 @@ function renderSharedAlbums() {
     else if (album.title.toLowerCase().includes('christmas') || album.title.toLowerCase().includes('holiday')) decorEmoji = '🎄';
     else if (album.title.toLowerCase().includes('birthday') || album.title.toLowerCase().includes('cake')) decorEmoji = '🎂';
 
-    // Check if current user is admin/super_admin to show Edit/Delete buttons
+    // Check if current user can edit to show Edit/Delete buttons
     let actionsHtml = '';
-    if (currentSession && (currentSession.role === 'super_admin' || currentSession.role === 'admin')) {
+    if (canEdit()) {
       actionsHtml = `
         <div class="album-card-actions">
           <button class="btn-icon-sm" onclick="openEditAlbumModal('${album.id}')" title="Edit Album"><i data-lucide="edit-3"></i></button>
@@ -2596,21 +2623,12 @@ function renderFullUserProfilePage() {
     relationHtml = `<div class="profile-relationships-container">${relationSections.join('')}</div>`;
   }
 
-  // 7. Security and Administrative Roles
-  let roleBadgeClass = 'member';
-  let roleLabel = 'Family Member';
-  if (member.systemRole === 'super_admin') {
-    roleBadgeClass = 'super-admin';
-    roleLabel = '👑 Super Admin';
-  } else if (member.systemRole === 'admin') {
-    roleBadgeClass = 'admin';
-    roleLabel = '🛠️ Admin Editor';
-  }
 
   const canModify = canEdit(member.id);
   let editActionsHtml = '';
   if (canModify) {
     editActionsHtml = `
+      <div class="actions-divider"></div>
       <div class="profile-edit-actions">
         <button class="btn btn-primary" onclick="openEditMemberModal('${member.id}')">
           <i data-lucide="edit-3"></i> Edit Profile / Contact
@@ -2629,12 +2647,8 @@ function renderFullUserProfilePage() {
       </div>
     `;
   } else {
-    editActionsHtml = `
-      <div class="glass p-12 border-radius-12 font-size-11 color-dim line-height-1.4 text-center">
-        <i data-lucide="shield-alert" style="vertical-align: middle; margin-right: 4px; width: 14px; height: 14px;"></i>
-        ${getPermissionMessage(member.id)}
-      </div>
-    `;
+    // Completely omit any warning banner in View Mode to keep UI clean
+    editActionsHtml = '';
   }
 
   // 8. Assemble Page Markup
@@ -2656,7 +2670,6 @@ function renderFullUserProfilePage() {
               ${member.nickname ? `<p class="profile-nickname">"${member.nickname}"</p>` : ''}
               
               <div class="profile-meta-tags">
-                <span class="drawer-role-tag ${roleBadgeClass}">${roleLabel}</span>
                 ${member.isDeceased ? `<span class="profile-deceased-tag">In Remembrance</span>` : ''}
               </div>
 
@@ -2694,7 +2707,6 @@ function renderFullUserProfilePage() {
                 <button class="btn btn-focus-action btn-glow" onclick="profileSetAsFocus('${member.id}')">
                   <i data-lucide="git-branch"></i> Set as Branch Focus (Navigate to Family Tree)
                 </button>
-                <div class="actions-divider"></div>
                 ${editActionsHtml}
               </div>
             </div>

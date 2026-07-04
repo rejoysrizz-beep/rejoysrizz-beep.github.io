@@ -10,11 +10,20 @@ let isDragging = false;
 let startX = 0, startY = 0;
 let activeHighlightedCardId = null;
 let focusedBranchRootId = null; // Global tracker for isolative branch focusing
-// Layout Grid parameters
-const CARD_WIDTH = 220;
+// Layout Grid parameters - updated for high compactness
+const CARD_WIDTH = 180;
 const CARD_HEIGHT = 96;
-const LAYER_HEIGHT = 280; // Vertical gap between generations
-const CARD_GAP_X = 260;    // Horizontal gap between members
+const LAYER_HEIGHT = 180; // Compact vertical gap between generations (horizontal layout)
+const CARD_GAP_X = 200;    // Compact horizontal gap between spouses (horizontal layout)
+const SIBLING_GAP = 40;    // Compact gap between sibling subtrees
+
+// Load orientation preference
+window.treeOrientation = localStorage.getItem('yoyovayo_tree_orientation') || 'vertical';
+
+// --- EXPAND/COLLAPSE GLOBAL STATE ---
+window.collapsedChildren = window.collapsedChildren || null;
+window.collapsedSiblings = window.collapsedSiblings || null;
+
 
 // --- INITIALIZE INTERACTIVE CANVAS ---
 function initializeTreeCanvas() {
@@ -295,6 +304,223 @@ function getFilteredTreeMembers() {
 }
 
 /**
+ * Processes the active branch and filters members recursively based on active expand/collapse states.
+ */
+function computeVisibleMembers() {
+  const filtered = getFilteredTreeMembers();
+  if (filtered.length === 0) return [];
+
+  // Default to collapse all if uninitialized
+  if (!window.collapsedChildren || !window.collapsedSiblings) {
+    window.collapsedChildren = new Set();
+    window.collapsedSiblings = new Set();
+    familyData.forEach(m => {
+      const hasChildren = familyData.some(x => x.fatherId === m.id || x.motherId === m.id);
+      if (hasChildren) {
+        window.collapsedChildren.add(m.id);
+      }
+    });
+  }
+
+  // Find root members within the filtered set
+  let roots = filtered.filter(m => {
+    const hasFather = m.fatherId && filtered.some(p => p.id === m.fatherId);
+    const hasMother = m.motherId && filtered.some(p => p.id === m.motherId);
+    if (hasFather || hasMother) return false;
+
+    if (m.spouseId) {
+      const spouse = filtered.find(s => s.id === m.spouseId);
+      if (spouse) {
+        const spouseHasFather = spouse.fatherId && filtered.some(p => p.id === spouse.fatherId);
+        const spouseHasMother = spouse.motherId && filtered.some(p => p.id === spouse.motherId);
+        if (spouseHasFather || spouseHasMother) return false;
+      }
+    }
+    return true;
+  });
+
+  if (roots.length === 0 && filtered.length > 0) {
+    roots = [filtered[0]];
+  }
+
+  const visible = new Set();
+
+  function traverse(memberId) {
+    if (visible.has(memberId)) return;
+    visible.add(memberId);
+
+    const m = filtered.find(x => x.id === memberId);
+    if (!m) return;
+
+    // Add spouse if any
+    if (m.spouseId) {
+      const spouse = filtered.find(x => x.id === m.spouseId);
+      if (spouse) {
+        visible.add(m.spouseId);
+      }
+    }
+
+    // Check if children are collapsed
+    const childrenCollapsed = window.collapsedChildren.has(m.id) || (m.spouseId && window.collapsedChildren.has(m.spouseId));
+    if (childrenCollapsed) {
+      return;
+    }
+
+    let children = filtered.filter(x => x.fatherId === m.id || x.motherId === m.id);
+    if (typeof sortSiblings === 'function') {
+      children = sortSiblings(children);
+    }
+
+    if (children.length === 0) return;
+
+    // Check if any of these children has siblings collapsed!
+    const siblingCollapser = children.find(child => window.collapsedSiblings.has(child.id));
+    if (siblingCollapser) {
+      traverse(siblingCollapser.id);
+    } else {
+      children.forEach(child => {
+        traverse(child.id);
+      });
+    }
+  }
+
+  roots.forEach(root => {
+    traverse(root.id);
+  });
+
+  return filtered.filter(m => visible.has(m.id));
+}
+window.computeVisibleMembers = computeVisibleMembers;
+
+function expandAll() {
+  window.collapsedChildren = new Set();
+  window.collapsedSiblings = new Set();
+  renderFamilyTree();
+  showGenericAlert('Expanded the entire family tree!', 'info');
+}
+window.expandAll = expandAll;
+
+function collapseAll() {
+  window.collapsedChildren = new Set();
+  window.collapsedSiblings = new Set();
+  familyData.forEach(m => {
+    const hasChildren = familyData.some(x => x.fatherId === m.id || x.motherId === m.id);
+    if (hasChildren) {
+      window.collapsedChildren.add(m.id);
+    }
+  });
+  renderFamilyTree();
+  showGenericAlert('Collapsed all branches down to root.', 'info');
+}
+window.collapseAll = collapseAll;
+
+function toggleChildren(memberId, event) {
+  if (event) event.stopPropagation();
+  const m = familyData.find(x => x.id === memberId);
+  if (!m) return;
+
+  const isCollapsed = window.collapsedChildren.has(m.id) || (m.spouseId && window.collapsedChildren.has(m.spouseId));
+
+  if (isCollapsed) {
+    window.collapsedChildren.delete(m.id);
+    if (m.spouseId) {
+      window.collapsedChildren.delete(m.spouseId);
+    }
+  } else {
+    window.collapsedChildren.add(m.id);
+    if (m.spouseId) {
+      window.collapsedChildren.add(m.spouseId);
+    }
+  }
+
+  renderFamilyTree();
+}
+window.toggleChildren = toggleChildren;
+
+function toggleSiblings(memberId, event) {
+  if (event) event.stopPropagation();
+  const m = familyData.find(x => x.id === memberId);
+  if (!m) return;
+
+  const isCollapsed = window.collapsedSiblings.has(m.id);
+
+  if (isCollapsed) {
+    window.collapsedSiblings.delete(m.id);
+  } else {
+    // Clear other siblings of the same parent
+    const parentChildren = familyData.filter(x => 
+      (m.fatherId && x.fatherId === m.fatherId) ||
+      (m.motherId && x.motherId === m.motherId)
+    );
+    parentChildren.forEach(sib => {
+      window.collapsedSiblings.delete(sib.id);
+    });
+    window.collapsedSiblings.add(m.id);
+  }
+
+  renderFamilyTree();
+}
+window.toggleSiblings = toggleSiblings;
+
+function clearCollapsedStates() {
+  window.collapsedChildren = null;
+  window.collapsedSiblings = null;
+}
+window.clearCollapsedStates = clearCollapsedStates;
+
+function expandAncestors(memberId, skipRender = false) {
+  const m = familyData.find(x => x.id === memberId);
+  if (!m) return false;
+
+  let needsRender = false;
+
+  // Initialize if uninitialized
+  if (!window.collapsedChildren || !window.collapsedSiblings) {
+    computeVisibleMembers(); // This forces initialization of default collapse states
+  }
+
+  // 1. Expand parents/ancestors
+  if (m.fatherId) {
+    if (window.collapsedChildren && window.collapsedChildren.has(m.fatherId)) {
+      window.collapsedChildren.delete(m.fatherId);
+      needsRender = true;
+    }
+    if (expandAncestors(m.fatherId, true)) {
+      needsRender = true;
+    }
+  }
+  if (m.motherId) {
+    if (window.collapsedChildren && window.collapsedChildren.has(m.motherId)) {
+      window.collapsedChildren.delete(m.motherId);
+      needsRender = true;
+    }
+    if (expandAncestors(m.motherId, true)) {
+      needsRender = true;
+    }
+  }
+
+  // 2. Expand siblings if this member was hidden due to sibling collapse
+  const parentChildren = familyData.filter(x => 
+    (m.fatherId && x.fatherId === m.fatherId) ||
+    (m.motherId && x.motherId === m.motherId)
+  );
+  parentChildren.forEach(sib => {
+    if (window.collapsedSiblings && window.collapsedSiblings.has(sib.id)) {
+      window.collapsedSiblings.delete(sib.id);
+      needsRender = true;
+    }
+  });
+
+  if (needsRender && !skipRender) {
+    renderFamilyTree();
+  }
+
+  return needsRender;
+}
+window.expandAncestors = expandAncestors;
+
+
+/**
  * Isolate tree focus to a chosen branch.
  */
 function isolateTreeBranch(memberId) {
@@ -385,7 +611,19 @@ function renderStandardTree() {
   svg.setAttribute("width", "4000");
   svg.setAttribute("height", "2500");
 
-  const filtered = getFilteredTreeMembers();
+  const container = document.getElementById('tree-container');
+  if (container) {
+    if (window.treeOrientation === 'vertical') {
+      container.classList.remove('horizontal-view');
+      container.classList.add('vertical-view');
+    } else {
+      container.classList.remove('vertical-view');
+      container.classList.add('horizontal-view');
+    }
+  }
+
+  const filtered = computeVisibleMembers();
+
 
   // Find all roots in the tree (members with no parents in filtered set)
   let roots = filtered.filter(m => {
@@ -413,7 +651,10 @@ function renderStandardTree() {
   const arranged = new Set();
   const visited = new Set();
 
-  // 1. Recursive helper to measure the width of each branch
+  const isVertical = window.treeOrientation === 'vertical';
+
+  // --- HORIZONTAL RECURSIVE HELPERS ---
+  // 1. Recursive helper to measure the width of each branch (horizontal layout)
   function measureSubtree(memberId) {
     if (visited.has(memberId)) return 0;
     visited.add(memberId);
@@ -423,12 +664,11 @@ function renderStandardTree() {
 
     const children = sortSiblings(filtered.filter(x => x.fatherId === m.id || x.motherId === m.id));
 
-    // If married, count spouse as part of this node's horizontal footprint
     if (m.spouseId && filtered.some(x => x.id === m.spouseId)) {
       visited.add(m.spouseId);
     }
 
-    const selfWidth = m.spouseId ? (CARD_WIDTH * 2 + 40) : CARD_WIDTH; // 480px for couple vs. 220px single
+    const selfWidth = m.spouseId ? (CARD_WIDTH + CARD_GAP_X) : CARD_WIDTH;
 
     if (children.length === 0) {
       return selfWidth;
@@ -438,14 +678,14 @@ function renderStandardTree() {
     children.forEach((child, idx) => {
       totalChildrenWidth += measureSubtree(child.id);
       if (idx < children.length - 1) {
-        totalChildrenWidth += 80; // Gap between sibling subtrees
+        totalChildrenWidth += SIBLING_GAP; // Compact sibling gap (40px)
       }
     });
 
     return Math.max(selfWidth, totalChildrenWidth);
   }
 
-  // 2. Recursive helper to position the subtrees
+  // 2. Recursive helper to position the subtrees (horizontal layout)
   function positionSubtree(memberId, startX, gen) {
     if (arranged.has(memberId)) return;
 
@@ -460,16 +700,14 @@ function renderStandardTree() {
     }
     arranged.add(m.id);
 
-    // Dynamic vertical layer coordinate
     const yCoord = gen * LAYER_HEIGHT + 100;
 
     visited.clear();
     const subtreeWidth = measureSubtree(memberId);
 
     if (children.length === 0) {
-      // Leaf node: center card(s) in allocated space
       if (isCouple) {
-        const midX = startX + (subtreeWidth - (CARD_WIDTH * 2 + 40)) / 2;
+        const midX = startX + (subtreeWidth - (CARD_WIDTH + CARD_GAP_X)) / 2;
         coords[m.id] = { x: midX, y: yCoord, gen };
         coords[m.spouseId] = { x: midX + CARD_GAP_X, y: yCoord, gen };
       } else {
@@ -479,7 +717,6 @@ function renderStandardTree() {
       return;
     }
 
-    // Recursively layout all children side-by-side
     let currentX = startX;
     const childCenters = [];
 
@@ -488,7 +725,6 @@ function renderStandardTree() {
       const childWidth = measureSubtree(child.id);
       positionSubtree(child.id, currentX, gen + 1);
 
-      // Find positioned child visual center
       if (coords[child.id]) {
         let cCenter = coords[child.id].x + CARD_WIDTH / 2;
         const childIsCouple = child.spouseId && filtered.some(x => x.id === child.spouseId);
@@ -498,11 +734,10 @@ function renderStandardTree() {
         childCenters.push(cCenter);
       }
 
-      currentX += childWidth + 80; // Sibling gap
+      currentX += childWidth + SIBLING_GAP;
     });
 
     if (childCenters.length > 0) {
-      // Position parents centered directly above child centers
       const minC = Math.min(...childCenters);
       const maxC = Math.max(...childCenters);
       const childrenMid = (minC + maxC) / 2;
@@ -515,7 +750,6 @@ function renderStandardTree() {
         coords[m.id] = { x: childrenMid - CARD_WIDTH / 2, y: yCoord, gen };
       }
     } else {
-      // Fallback if children couldn't be positioned
       if (isCouple) {
         coords[m.id] = { x: startX, y: yCoord, gen };
         coords[m.spouseId] = { x: startX + CARD_GAP_X, y: yCoord, gen };
@@ -525,22 +759,168 @@ function renderStandardTree() {
     }
   }
 
-  // 3. Layout multiple roots side-by-side
-  const rootPlaced = new Set();
-  let globalX = 200;
+  // --- VERTICAL RECURSIVE HELPERS ---
+  // 1. Recursive helper to measure the height of each branch (vertical sideways layout)
+  function measureSubtreeVert(memberId) {
+    if (visited.has(memberId)) return 0;
+    visited.add(memberId);
 
-  roots.forEach(r => {
-    if (rootPlaced.has(r.id)) return;
+    const m = filtered.find(x => x.id === memberId);
+    if (!m) return 0;
+
+    const children = sortSiblings(filtered.filter(x => x.fatherId === m.id || x.motherId === m.id));
+
+    if (m.spouseId && filtered.some(x => x.id === m.spouseId)) {
+      visited.add(m.spouseId);
+    }
+
+    const selfHeight = m.spouseId ? (CARD_HEIGHT * 2 + 19) : CARD_HEIGHT; // 211px vs 96px
+
+    if (children.length === 0) {
+      return selfHeight;
+    }
+
+    let totalChildrenHeight = 0;
+    children.forEach((child, idx) => {
+      totalChildrenHeight += measureSubtreeVert(child.id);
+      if (idx < children.length - 1) {
+        totalChildrenHeight += SIBLING_GAP; // Compact sibling gap (40px)
+      }
+    });
+
+    return Math.max(selfHeight, totalChildrenHeight);
+  }
+
+  // 2. Recursive helper to position the subtrees (vertical sideways layout)
+  function positionSubtreeVert(memberId, startY, gen) {
+    if (arranged.has(memberId)) return;
+
+    const m = filtered.find(x => x.id === memberId);
+    if (!m) return;
+
+    const children = sortSiblings(filtered.filter(x => x.fatherId === m.id || x.motherId === m.id));
+    const isCouple = m.spouseId && filtered.some(x => x.id === m.spouseId);
+
+    if (isCouple) {
+      arranged.add(m.spouseId);
+    }
+    arranged.add(m.id);
+
+    // Generations run along X-axis
+    const xCoord = gen * 260 + 100;
 
     visited.clear();
-    const rootWidth = measureSubtree(r.id);
-    positionSubtree(r.id, globalX, 0);
+    const subtreeHeight = measureSubtreeVert(memberId);
 
-    rootPlaced.add(r.id);
-    if (r.spouseId) rootPlaced.add(r.spouseId);
+    if (children.length === 0) {
+      if (isCouple) {
+        const midY = startY + (subtreeHeight - (CARD_HEIGHT * 2 + 19)) / 2;
+        const spouse = filtered.find(x => x.id === m.spouseId);
+        let husbandId = m.id;
+        let wifeId = m.spouseId;
+        if (m.gender === 'Female' || (spouse && spouse.gender === 'Male')) {
+          husbandId = m.spouseId;
+          wifeId = m.id;
+        }
+        coords[husbandId] = { x: xCoord, y: midY, gen };
+        coords[wifeId] = { x: xCoord, y: midY + 115, gen };
+      } else {
+        const midY = startY + (subtreeHeight - CARD_HEIGHT) / 2;
+        coords[m.id] = { x: xCoord, y: midY, gen };
+      }
+      return;
+    }
 
-    globalX += rootWidth + 150; // Distinct space between root trees
-  });
+    let currentY = startY;
+    const childCenters = [];
+
+    children.forEach(child => {
+      visited.clear();
+      const childHeight = measureSubtreeVert(child.id);
+      positionSubtreeVert(child.id, currentY, gen + 1);
+
+      if (coords[child.id]) {
+        let cCenter = coords[child.id].y + CARD_HEIGHT / 2;
+        const childIsCouple = child.spouseId && filtered.some(x => x.id === child.spouseId);
+        if (childIsCouple && coords[child.spouseId]) {
+          cCenter = (coords[child.id].y + coords[child.spouseId].y + CARD_HEIGHT) / 2;
+        }
+        childCenters.push(cCenter);
+      }
+
+      currentY += childHeight + SIBLING_GAP;
+    });
+
+    if (childCenters.length > 0) {
+      const minC = Math.min(...childCenters);
+      const maxC = Math.max(...childCenters);
+      const childrenMidY = (minC + maxC) / 2;
+
+      if (isCouple) {
+        const parentTopY = childrenMidY - (CARD_HEIGHT * 2 + 19) / 2;
+        const spouse = filtered.find(x => x.id === m.spouseId);
+        let husbandId = m.id;
+        let wifeId = m.spouseId;
+        if (m.gender === 'Female' || (spouse && spouse.gender === 'Male')) {
+          husbandId = m.spouseId;
+          wifeId = m.id;
+        }
+        coords[husbandId] = { x: xCoord, y: parentTopY, gen };
+        coords[wifeId] = { x: xCoord, y: parentTopY + 115, gen };
+      } else {
+        coords[m.id] = { x: xCoord, y: childrenMidY - CARD_HEIGHT / 2, gen };
+      }
+    } else {
+      if (isCouple) {
+        const spouse = filtered.find(x => x.id === m.spouseId);
+        let husbandId = m.id;
+        let wifeId = m.spouseId;
+        if (m.gender === 'Female' || (spouse && spouse.gender === 'Male')) {
+          husbandId = m.spouseId;
+          wifeId = m.id;
+        }
+        coords[husbandId] = { x: xCoord, y: startY, gen };
+        coords[wifeId] = { x: xCoord, y: startY + 115, gen };
+      } else {
+        coords[m.id] = { x: xCoord, y: startY, gen };
+      }
+    }
+  }
+
+  // --- POSITION ROOTS ---
+  if (isVertical) {
+    const rootPlaced = new Set();
+    let globalY = 100;
+
+    roots.forEach(r => {
+      if (rootPlaced.has(r.id)) return;
+
+      visited.clear();
+      const rootHeight = measureSubtreeVert(r.id);
+      positionSubtreeVert(r.id, globalY, 0);
+
+      rootPlaced.add(r.id);
+      if (r.spouseId) rootPlaced.add(r.spouseId);
+
+      globalY += rootHeight + 100; // Distinct space between root trees vertically
+    });
+  } else {
+    const rootPlaced = new Set();
+    let globalX = 200;
+
+    roots.forEach(r => {
+      if (rootPlaced.has(r.id)) return;
+
+      visited.clear();
+      const rootWidth = measureSubtree(r.id);
+      positionSubtree(r.id, globalX, 0);
+
+      rootPlaced.add(r.id);
+      if (r.spouseId) rootPlaced.add(r.spouseId);
+
+      globalX += rootWidth + 150; // Distinct space between root trees
+    });
+  }
 
   // Dynamically compute max coordinates to auto-resize SVG canvas and container elements
   let maxCoordX = 4000;
@@ -573,10 +953,30 @@ function renderStandardTree() {
     if (m.spouseId && coords[m.spouseId] && m.id < m.spouseId && filtered.some(x => x.id === m.spouseId)) {
       const spouseC = coords[m.spouseId];
       
-      const startX = c.x + CARD_WIDTH;
-      const startY = c.y + CARD_HEIGHT / 2;
-      const endX = spouseC.x;
-      const endY = spouseC.y + CARD_HEIGHT / 2;
+      let startX, startY, endX, endY, midX, midY;
+      
+      if (isVertical) {
+        // Sideways Spouse connector: vertical line from upper card bottom-center to lower card top-center
+        const upper = c.y < spouseC.y ? c : spouseC;
+        const lower = c.y < spouseC.y ? spouseC : c;
+        
+        startX = upper.x + CARD_WIDTH / 2;
+        startY = upper.y + CARD_HEIGHT;
+        endX = lower.x + CARD_WIDTH / 2;
+        endY = lower.y;
+        
+        midX = startX;
+        midY = (startY + endY) / 2;
+      } else {
+        // Top-down Spouse connector: horizontal line from left spouse right-center to right spouse left-center
+        startX = c.x + CARD_WIDTH;
+        startY = c.y + CARD_HEIGHT / 2;
+        endX = spouseC.x;
+        endY = spouseC.y + CARD_HEIGHT / 2;
+        
+        midX = (startX + endX) / 2;
+        midY = startY;
+      }
 
       const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
       path.setAttribute("d", `M ${startX} ${startY} L ${endX} ${endY}`);
@@ -586,14 +986,11 @@ function renderStandardTree() {
 
       const midKey = [m.id, m.spouseId].sort().join('-');
       marriageMidpoints[midKey] = {
-        x: (startX + endX) / 2,
-        y: startY
+        x: midX,
+        y: midY
       };
 
       if (m.marriageDate) {
-        const midX = (startX + endX) / 2;
-        const midY = startY;
-
         const textGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
         textGroup.setAttribute("transform", `translate(${midX}, ${midY})`);
 
@@ -631,39 +1028,75 @@ function renderStandardTree() {
       let parentAnchorX = 0;
       let parentAnchorY = 0;
 
-      if (hasFather && hasMother) {
-        const midKey = [m.fatherId, m.motherId].sort().join('-');
-        if (marriageMidpoints[midKey]) {
-          parentAnchorX = marriageMidpoints[midKey].x;
-          parentAnchorY = marriageMidpoints[midKey].y;
-        } else {
-          parentAnchorX = (coords[m.fatherId].x + coords[m.motherId].x) / 2 + CARD_WIDTH / 2;
-          parentAnchorY = coords[m.fatherId].y + CARD_HEIGHT;
+      if (isVertical) {
+        if (hasFather && hasMother) {
+          const midKey = [m.fatherId, m.motherId].sort().join('-');
+          if (marriageMidpoints[midKey]) {
+            parentAnchorX = marriageMidpoints[midKey].x;
+            parentAnchorY = marriageMidpoints[midKey].y;
+          } else {
+            parentAnchorX = coords[m.fatherId].x + CARD_WIDTH;
+            parentAnchorY = (coords[m.fatherId].y + coords[m.motherId].y) / 2 + CARD_HEIGHT / 2;
+          }
+        } else if (hasFather) {
+          parentAnchorX = coords[m.fatherId].x + CARD_WIDTH;
+          parentAnchorY = coords[m.fatherId].y + CARD_HEIGHT / 2;
+        } else if (hasMother) {
+          parentAnchorX = coords[m.motherId].x + CARD_WIDTH;
+          parentAnchorY = coords[m.motherId].y + CARD_HEIGHT / 2;
         }
-      } else if (hasFather) {
-        parentAnchorX = coords[m.fatherId].x + CARD_WIDTH / 2;
-        parentAnchorY = coords[m.fatherId].y + CARD_HEIGHT;
-      } else if (hasMother) {
-        parentAnchorX = coords[m.motherId].x + CARD_WIDTH / 2;
-        parentAnchorY = coords[m.motherId].y + CARD_HEIGHT;
+
+        const childX = c.x;
+        const childY = c.y + CARD_HEIGHT / 2;
+
+        const routeX = parentAnchorX + 30;
+        const pathData = `
+          M ${parentAnchorX} ${parentAnchorY}
+          L ${routeX} ${parentAnchorY}
+          L ${routeX} ${childY}
+          L ${childX} ${childY}
+        `;
+
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("d", pathData);
+        path.setAttribute("class", "connector-line");
+        path.setAttribute("id", `child-line-${m.id}`);
+        svg.appendChild(path);
+      } else {
+        if (hasFather && hasMother) {
+          const midKey = [m.fatherId, m.motherId].sort().join('-');
+          if (marriageMidpoints[midKey]) {
+            parentAnchorX = marriageMidpoints[midKey].x;
+            parentAnchorY = marriageMidpoints[midKey].y;
+          } else {
+            parentAnchorX = (coords[m.fatherId].x + coords[m.motherId].x) / 2 + CARD_WIDTH / 2;
+            parentAnchorY = coords[m.fatherId].y + CARD_HEIGHT;
+          }
+        } else if (hasFather) {
+          parentAnchorX = coords[m.fatherId].x + CARD_WIDTH / 2;
+          parentAnchorY = coords[m.fatherId].y + CARD_HEIGHT;
+        } else if (hasMother) {
+          parentAnchorX = coords[m.motherId].x + CARD_WIDTH / 2;
+          parentAnchorY = coords[m.motherId].y + CARD_HEIGHT;
+        }
+
+        const childX = c.x + CARD_WIDTH / 2;
+        const childY = c.y;
+
+        const dropY = parentAnchorY + 40;
+        const pathData = `
+          M ${parentAnchorX} ${parentAnchorY}
+          L ${parentAnchorX} ${dropY}
+          L ${childX} ${dropY}
+          L ${childX} ${childY}
+        `;
+
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("d", pathData);
+        path.setAttribute("class", "connector-line");
+        path.setAttribute("id", `child-line-${m.id}`);
+        svg.appendChild(path);
       }
-
-      const childX = c.x + CARD_WIDTH / 2;
-      const childY = c.y;
-
-      const dropY = parentAnchorY + 40;
-      const pathData = `
-        M ${parentAnchorX} ${parentAnchorY}
-        L ${parentAnchorX} ${dropY}
-        L ${childX} ${dropY}
-        L ${childX} ${childY}
-      `;
-
-      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-      path.setAttribute("d", pathData);
-      path.setAttribute("class", "connector-line");
-      path.setAttribute("id", `child-line-${m.id}`);
-      svg.appendChild(path);
     }
   });
 
@@ -695,10 +1128,30 @@ function renderStandardTree() {
     let badgesHtml = '';
     if (m.isDeceased) {
       badgesHtml += `<span class="card-badge deceased">🕊️ Passed</span>`;
-    } else if (editable) {
-      badgesHtml += `<span class="card-badge editable" title="You have edit rights on this member">✍️ Edit</span>`;
-    } else if (currentSession) {
-      badgesHtml += `<span class="card-badge lock" title="View Only: restricted to descendants"><i data-lucide="lock" style="width: 8px; height: 8px;"></i> Lock</span>`;
+    }
+
+    let togglesHtml = '';
+    const hasChildren = familyData.some(x => x.fatherId === m.id || x.motherId === m.id);
+    if (hasChildren) {
+      const isChildrenCollapsed = window.collapsedChildren.has(m.id) || (m.spouseId && window.collapsedChildren.has(m.spouseId));
+      togglesHtml += `
+        <div class="tree-node-toggle toggle-children" title="${isChildrenCollapsed ? 'Expand Children' : 'Collapse Children'}" onclick="toggleChildren('${m.id}', event)">
+          <i data-lucide="${isChildrenCollapsed ? 'plus' : 'minus'}"></i>
+        </div>
+      `;
+    }
+
+    const siblings = familyData.filter(x => 
+      (m.fatherId && x.fatherId === m.fatherId && x.id !== m.id) ||
+      (m.motherId && x.motherId === m.motherId && x.id !== m.id)
+    );
+    if (siblings.length > 0) {
+      const isSiblingsCollapsed = window.collapsedSiblings.has(m.id);
+      togglesHtml += `
+        <div class="tree-node-toggle toggle-siblings" title="${isSiblingsCollapsed ? 'Expand Siblings' : 'Collapse Siblings'}" onclick="toggleSiblings('${m.id}', event)">
+          <i data-lucide="${isSiblingsCollapsed ? 'plus' : 'minus'}"></i>
+        </div>
+      `;
     }
 
     card.innerHTML = `
@@ -708,20 +1161,13 @@ function renderStandardTree() {
         <div class="gender-dot ${m.gender.toLowerCase()}"></div>
       </div>
       <div class="card-name">${m.firstName} ${m.lastName}</div>
+      ${togglesHtml}
     `;
+
 
     card.onclick = (e) => {
       e.stopPropagation();
       openInfoDrawer(m.id);
-    };
-
-    card.ondblclick = (e) => {
-      e.stopPropagation();
-      if (editable) {
-        openEditMemberModal(m.id);
-      } else {
-        showGenericAlert(getPermissionMessage(m.id), 'warning');
-      }
     };
 
     card.onmouseenter = () => highlightRelations(m.id, true);
@@ -732,6 +1178,18 @@ function renderStandardTree() {
 
   if (activeHighlightedCardId) {
     focusOnTreeCard(activeHighlightedCardId, false);
+  }
+
+  // Synchronize orientation button icon
+  const orientationBtn = document.getElementById('tree-orientation-btn');
+  if (orientationBtn) {
+    if (window.treeOrientation === 'vertical') {
+      orientationBtn.innerHTML = '<i data-lucide="git-branch"></i>';
+      orientationBtn.setAttribute('title', 'Switch to Top-down view');
+    } else {
+      orientationBtn.innerHTML = '<i data-lucide="git-commit"></i>';
+      orientationBtn.setAttribute('title', 'Switch to Sideways view');
+    }
   }
 
   safeCreateIcons();
@@ -767,8 +1225,12 @@ function closeInfoDrawer() {
  * @param {boolean} triggerClick If true, opens the inspector panel
  */
 function focusOnTreeCard(memberId, triggerClick = true) {
+  if (typeof expandAncestors === 'function') {
+    expandAncestors(memberId);
+  }
   const card = document.querySelector(`.family-card[data-id="${memberId}"]`);
   if (!card) return;
+
 
   const left = parseFloat(card.style.left) || 0;
   const top = parseFloat(card.style.top) || 0;
@@ -832,3 +1294,24 @@ window.addEventListener('resize', () => {
     resetZoom();
   }
 });
+
+function toggleTreeOrientation() {
+  window.treeOrientation = window.treeOrientation === 'vertical' ? 'horizontal' : 'vertical';
+  localStorage.setItem('yoyovayo_tree_orientation', window.treeOrientation);
+  
+  // Update button icon dynamically
+  const btn = document.getElementById('tree-orientation-btn');
+  if (btn) {
+    if (window.treeOrientation === 'vertical') {
+      btn.innerHTML = '<i data-lucide="git-branch"></i>';
+      btn.setAttribute('title', 'Switch to Top-down view');
+    } else {
+      btn.innerHTML = '<i data-lucide="git-commit"></i>';
+      btn.setAttribute('title', 'Switch to Sideways view');
+    }
+    safeCreateIcons();
+  }
+  
+  renderFamilyTree();
+}
+window.toggleTreeOrientation = toggleTreeOrientation;

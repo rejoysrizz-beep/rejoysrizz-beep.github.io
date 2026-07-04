@@ -430,6 +430,64 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--text-primary);
 }
 
+.lock-toggle-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-color);
+  transition: var(--transition-smooth);
+}
+
+.lock-toggle-btn:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+  transform: scale(1.05);
+}
+
+/* Glassmorphism theme specific styling */
+.dark-theme .lock-toggle-btn {
+  background: rgba(30, 41, 59, 0.4);
+  backdrop-filter: blur(8px);
+}
+
+.light-theme .lock-toggle-btn {
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(8px);
+}
+
+/* Unlocked (Edit Mode) vs Locked (View Mode) visual styles */
+.lock-toggle-btn.unlocked {
+  color: var(--gold);
+  border-color: rgba(245, 158, 11, 0.3);
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.1);
+}
+
+.lock-toggle-btn.unlocked:hover {
+  color: #fff;
+  border-color: var(--gold);
+  background-color: var(--gold);
+  box-shadow: 0 0 15px var(--gold-glow);
+}
+
+.lock-toggle-btn.locked {
+  color: var(--text-secondary);
+  border-color: var(--border-color);
+}
+
+.lock-toggle-btn.locked:hover {
+  color: #fff;
+  border-color: var(--red);
+  background-color: var(--red);
+  box-shadow: 0 0 15px rgba(244, 63, 94, 0.4);
+}
+
+
 .session-badge {
   display: flex;
   align-items: center;
@@ -655,7 +713,7 @@ h1, h2, h3, h4, h5, h6 {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 24px; /* Increased from 20px */
+  font-size: 32px; /* Increased from 24px */
   overflow: hidden;
   transition: var(--transition-smooth);
 }
@@ -723,9 +781,6 @@ h1, h2, h3, h4, h5, h6 {
 .card-badge.lock { background-color: rgba(0, 0, 0, 0.4); color: #ffffff; }
 
 /* Glowing indicators */
-.family-card.is-editable {
-  box-shadow: 0 0 10px var(--green-glow);
-}
 .family-card.celebrating-today-card {
   border-color: var(--gold);
   box-shadow: 0 0 15px var(--gold-glow);
@@ -786,18 +841,7 @@ h1, h2, h3, h4, h5, h6 {
 .drawer-profile h3.cinzel-title {
   font-size: 16px !important;
 }
-.drawer-role-tag {
-  font-size: 9px;
-  text-transform: uppercase;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  padding: 1px 8px;
-  border-radius: 20px;
-  border: 1px solid var(--border-color);
-}
-.drawer-role-tag.super-admin { border-color: var(--gold); color: var(--gold); }
-.drawer-role-tag.admin { border-color: var(--accent-color); color: var(--accent-color); }
-.drawer-role-tag.member { border-color: var(--green); color: var(--green); }
+
 
 .drawer-sections {
   display: flex;
@@ -1022,7 +1066,7 @@ h1, h2, h3, h4, h5, h6 {
   gap: 16px;
 }
 .timeline-avatar {
-  font-size: 32px;
+  font-size: 40px; /* Increased from 32px */
   width: 52px;
   height: 52px;
   border-radius: 50%;
@@ -1952,6 +1996,9 @@ h1, h2, h3, h4, h5, h6 {
   height: 108px;
   margin-bottom: 16px;
 }
+.slide-avatar-ring.anniversary-ring {
+  width: 162px; /* Expanded for overlapping spouse avatars */
+}
 .slide-avatar {
   width: 100%;
   height: 100%;
@@ -1961,7 +2008,7 @@ h1, h2, h3, h4, h5, h6 {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 52px;
+  font-size: 72px; /* Increased from 52px */
   box-shadow: 0 8px 24px rgba(0,0,0,0.3);
 }
 
@@ -2130,6 +2177,7 @@ h1, h2, h3, h4, h5, h6 {
   overflow: hidden;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
   border: 2px solid var(--accent-color);
+  font-size: 48px; /* Prominent fallback emoji */
 }
 
 .avatar-md {
@@ -2477,6 +2525,7 @@ h1, h2, h3, h4, h5, h6 {
   width: 72px;
   height: 72px;
   min-width: 72px;
+  font-size: 44px; /* Scaled fallback emoji */
 }
 
 .profile-deceased-badge {
@@ -2794,7 +2843,7 @@ h1, h2, h3, h4, h5, h6 {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: 14px; /* Increased from 11px */
   background: var(--bg-secondary);
 }
 
@@ -3184,4 +3233,160 @@ h1, h2, h3, h4, h5, h6 {
   line-height: 1.4;
 }
 
+/* --- DYNAMIC FAMILY TREE EXPAND/COLLAPSE SYSTEM --- */
+.tree-node-toggle {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  background-color: var(--card-bg);
+  border: 1.5px solid var(--border-color);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  color: var(--text-secondary);
+}
+
+.tree-node-toggle:hover {
+  background-color: var(--accent-color);
+  border-color: var(--accent-color);
+  color: #0d0f12;
+  transform: scale(1.2);
+  box-shadow: 0 0 10px var(--accent-color);
+}
+
+.tree-node-toggle i,
+.tree-node-toggle svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 3px;
+  display: block;
+}
+
+/* Position of toggle buttons based on orientation of tree-container */
+/* For Vertical View (Generations go left-to-right, siblings top-to-bottom) */
+.vertical-view .toggle-children {
+  right: -11px;
+  top: calc(50% - 11px);
+}
+.vertical-view .toggle-siblings {
+  bottom: -11px;
+  left: calc(50% - 11px);
+}
+
+/* For Horizontal View (Generations go top-to-bottom, siblings left-to-right) */
+.horizontal-view .toggle-children {
+  bottom: -11px;
+  left: calc(50% - 11px);
+}
+.horizontal-view .toggle-siblings {
+  right: -11px;
+  top: calc(50% - 11px);
+}
+
+/* Additional layout fixes for smooth scaling */
+.dark-theme .tree-node-toggle {
+  background: rgba(20, 24, 30, 0.95);
+  backdrop-filter: blur(8px);
+}
+
+
+/* =================================================================
+   MASTERCARD-STYLE HORIZONTALLY OVERLAPPING SPOUSE AVATARS
+   ================================================================= */
+.overlapping-avatars-wrapper {
+  display: flex;
+  position: relative;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Timeline Cards Overlap (Marriage milestones list) */
+.overlapping-avatars-wrapper.timeline-overlap {
+  width: 78px; /* Room for overlapping */
+  height: 52px;
+  min-width: 78px;
+}
+.overlapping-avatars-wrapper.timeline-overlap .overlap-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  position: absolute;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--bg-primary);
+  background: var(--bg-tertiary);
+  transition: var(--transition-smooth);
+}
+.overlapping-avatars-wrapper.timeline-overlap .overlap-avatar.primary {
+  left: 0;
+  z-index: 2;
+}
+.overlapping-avatars-wrapper.timeline-overlap .overlap-avatar.secondary {
+  left: 26px; /* 50% horizontal offset overlap */
+  z-index: 1;
+}
+
+/* Milestone Hero Card Overlap */
+.overlapping-avatars-wrapper.hero-overlap {
+  width: 144px; /* Room for overlapping */
+  height: 96px;
+  margin: 0 auto 16px auto;
+}
+.overlapping-avatars-wrapper.hero-overlap .overlap-avatar {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  position: absolute;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px solid var(--bg-secondary);
+  background: var(--bg-tertiary);
+  transition: var(--transition-smooth);
+}
+.overlapping-avatars-wrapper.hero-overlap .overlap-avatar.primary {
+  left: 0;
+  z-index: 2;
+}
+.overlapping-avatars-wrapper.hero-overlap .overlap-avatar.secondary {
+  left: 48px; /* 50% horizontal offset overlap */
+  z-index: 1;
+}
+
+/* Celebrations Slide Overlap */
+.overlapping-avatars-wrapper.slide-overlap {
+  width: 162px; /* Room for overlapping */
+  height: 108px;
+  margin: 0 auto;
+}
+.overlapping-avatars-wrapper.slide-overlap .overlap-avatar {
+  width: 108px;
+  height: 108px;
+  border-radius: 50%;
+  position: absolute;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 4.5px solid var(--gold);
+  background: var(--bg-secondary);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  transition: var(--transition-smooth);
+}
+.overlapping-avatars-wrapper.slide-overlap .overlap-avatar.primary {
+  left: 0;
+  z-index: 2;
+}
+.overlapping-avatars-wrapper.slide-overlap .overlap-avatar.secondary {
+  left: 54px; /* 50% horizontal offset overlap */
+  z-index: 1;
+}
 

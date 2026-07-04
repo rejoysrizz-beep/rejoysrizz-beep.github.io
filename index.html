@@ -149,17 +149,10 @@
             <i data-lucide="moon" id="theme-icon-moon"></i>
           </button>
 
-          <!-- User session profile badge -->
-          <div id="session-badge" class="session-badge guest hidden">
-            <div class="session-avatar" id="session-avatar">👤</div>
-            <div class="session-info">
-              <span class="session-name" id="session-name">Guest Account</span>
-              <span class="session-role" id="session-role">View-Only Mode</span>
-            </div>
-            <button class="btn-auth" id="auth-action-btn" onclick="openLoginModal()">
-              <i data-lucide="log-in"></i> Login
-            </button>
-          </div>
+          <!-- Circular Glassmorphic Lock Toggle Button -->
+          <button id="edit-mode-lock-btn" class="lock-toggle-btn unlocked" onclick="toggleEditModeGlobal()" title="Toggle Edit/View Mode">
+            <i id="lock-icon" data-lucide="lock-open"></i>
+          </button>
         </div>
       </header>
 
@@ -177,6 +170,9 @@
             <button onclick="zoomIn()" title="Zoom In"><i data-lucide="zoom-in"></i></button>
             <button onclick="zoomOut()" title="Zoom Out"><i data-lucide="zoom-out"></i></button>
             <button onclick="resetZoom()" title="Recenter tree"><i data-lucide="maximize"></i></button>
+            <button onclick="expandAll()" title="Expand All"><i data-lucide="chevrons-up-down"></i></button>
+            <button onclick="collapseAll()" title="Collapse All"><i data-lucide="chevrons-down-up"></i></button>
+            <button onclick="toggleTreeOrientation()" id="tree-orientation-btn" title="Toggle Sideways/Top-down view"><i data-lucide="git-commit"></i></button>
             <button onclick="openAddMemberModal()" class="btn-add-floating btn-glow hidden-guest" id="add-member-btn" title="Add Family Member">
               <i data-lucide="plus"></i> Add Member
             </button>
@@ -277,7 +273,7 @@
               </div>
             </div>
 
-            <div class="settings-card glass">
+            <div class="settings-card glass hidden-guest">
               <h3><i data-lucide="database-backup"></i> Backup and Restore</h3>
               <p>Save your complete family structure (including permissions, notes, and events) into a lightweight JSON file.</p>
               <div class="settings-actions flex-wrap gap-12">
@@ -286,10 +282,17 @@
                   <i data-lucide="upload"></i> Import Backup JSON
                   <input type="file" id="import-file-input" class="hidden-input" onchange="importFamilyData(event)">
                 </label>
+                <button class="btn btn-secondary" onclick="revealWebRestoreSettings()"><i data-lucide="globe"></i> Restore from Web</button>
+              </div>
+              <div id="web-restore-settings-container" style="display: none; margin-top: 16px; width: 100%;">
+                <div style="display: flex; gap: 8px; width: 100%; max-width: 480px;">
+                  <input type="text" id="web-restore-settings-url" placeholder="https://example.com/family.json" class="form-control" style="flex: 1; padding: 10px; border-radius: 8px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); color: var(--text-primary); font-size: 13px;">
+                  <button class="btn btn-primary" onclick="submitWebRestoreSettings()" style="padding: 10px 16px;">Restore</button>
+                </div>
               </div>
             </div>
 
-            <div class="settings-card glass">
+            <div class="settings-card glass hidden-guest">
               <h3><i data-lucide="refresh-cw"></i> Database Reset</h3>
               <p>You can clear your local database to start creating your family tree from scratch.</p>
               <div class="settings-actions flex-wrap gap-12">
@@ -311,13 +314,20 @@
             </div>
 
             <div class="settings-card glass">
-              <h3><i data-lucide="shield-check"></i> Role-Based Permissions Help</h3>
-              <p>YoyoVayo! uses a high-fidelity permission model to govern collaborative editing:</p>
-              <div class="permission-help-grid">
-                <div><strong>👑 Super Admin</strong>: The creator of the tree. Complete edit capabilities over everyone, plus exclusive rights to promote other members to Admins via the editing form.</div>
-                <div><strong>🛠️ Admin</strong>: Selected family co-developers. Can edit details, add relationships, and develop the entire tree. Cannot edit the Super Admin or change roles.</div>
-                <div><strong>👤 Regular Member</strong>: Logged-in family member. Restrained edit privileges: can only update their own profile and add/edit spouses and descendants (children, grandchildren, etc. "below them").</div>
-                <div><strong>👁️ Guest</strong>: Unauthenticated user. View-only access.</div>
+              <h3><i data-lucide="shield-check"></i> Application Security Mode</h3>
+              <p>Toggle between Edit Mode (to make changes, add members, or import backups) and View Mode (to lock the application and prevent accidental data modifications).</p>
+              
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 16px; background: rgba(255,255,255,0.02); padding: 14px 20px; border-radius: 12px; border: 1px solid var(--border-color); flex-wrap: wrap; gap: 12px; width: 100%;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <span id="settings-mode-icon" style="font-size: 24px;">✍️</span>
+                  <div>
+                    <h4 id="settings-mode-title" style="margin: 0; color: var(--gold); font-weight: 700;">Edit Mode (Unlocked)</h4>
+                    <p id="settings-mode-desc" style="margin: 4px 0 0 0; font-size: 12px; color: var(--text-secondary);">You have full administrator privileges to modify the family tree.</p>
+                  </div>
+                </div>
+                <div>
+                  <button id="toggle-mode-btn" class="btn btn-primary btn-glow" onclick="toggleEditModeGlobal()">Switch to View Mode</button>
+                </div>
               </div>
             </div>
           </div>
@@ -332,31 +342,7 @@
     </main>
   </div>
 
-  <!-- ================================================================= -->
-  <!-- MODAL: SECURE LOGIN -->
-  <!-- ================================================================= -->
-  <div id="login-modal" class="modal hidden">
-    <div class="modal-content login-modal-content glass">
-      <button class="modal-close" onclick="closeLoginModal()">&times;</button>
-      <div class="login-decor">🔑</div>
-      <h2 class="cinzel-title">Member Login</h2>
-      <p class="modal-subtitle">Select a family member to log in instantly.</p>
 
-      <!-- MEMBER SELECTOR STATE -->
-      <div id="login-step-member">
-        <div class="form-group margin-top-16">
-          <label for="login-member-search">Search Member Name or Nickname</label>
-          <div class="search-box">
-            <i data-lucide="search"></i>
-            <input type="text" id="login-member-search" placeholder="Type name or nickname..." oninput="filterLoginMembers(this.value)">
-          </div>
-        </div>
-        <div class="login-member-list" id="login-member-results">
-          <!-- Dynamic members results rendered here -->
-        </div>
-      </div>
-    </div>
-  </div>
 
   <!-- ================================================================= -->
   <!-- MODAL: ADD / EDIT FAMILY MEMBER -->
@@ -508,19 +494,7 @@
           </div>
         </div>
 
-        <!-- Section 6: SUPER ADMIN SECURITY CONTROLS -->
-        <div class="form-section hidden" id="form-section-security">
-          <h4 class="color-gold"><i data-lucide="shield"></i> Administrative Roles</h4>
-          <p class="form-section-desc">Only the Super Admin can promote/demote members' system clearance roles.</p>
-          <div class="form-group">
-            <label for="form-system-role">System Role Permission</label>
-            <select id="form-system-role">
-              <option value="member">Regular Member (Descendant edits only)</option>
-              <option value="admin">Admin (Full tree edits except Super Admin)</option>
-              <option value="super_admin">Super Admin (Ultimate control over entire tree)</option>
-            </select>
-          </div>
-        </div>
+
 
         <div class="form-actions">
           <button type="button" class="btn btn-secondary" onclick="closeMemberModal()">Cancel</button>

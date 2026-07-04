@@ -255,10 +255,19 @@ function renderDaySlideContent() {
 
     const tagLabel = ev.type === 'death' ? 'In Remembrance' : ev.title;
 
+    const isMarriage = ev.type === 'marriage';
+    const ringClass = isMarriage ? 'slide-avatar-ring anniversary-ring' : 'slide-avatar-ring';
+    const avatarHtml = isMarriage
+      ? `<div class="overlapping-avatars-wrapper slide-overlap">
+          <div class="overlap-avatar primary">${getMemberAvatarHtml(ev.member)}</div>
+          <div class="overlap-avatar secondary">${getMemberAvatarHtml(ev.spouse)}</div>
+         </div>`
+      : `<div class="slide-avatar">${getMemberAvatarHtml(ev.member)}</div>`;
+
     slide.innerHTML = `
       <span class="slide-tag">${tagLabel}</span>
-      <div class="slide-avatar-ring cursor-pointer" onclick="viewProfileFromCelebration('${ev.member.id}')" title="Click to view profile">
-        <div class="slide-avatar">${getMemberAvatarHtml(ev.member)}</div>
+      <div class="${ringClass} cursor-pointer" onclick="viewProfileFromCelebration('${ev.member.id}')" title="Click to view profile">
+        ${avatarHtml}
       </div>
       <h3 class="slide-title cinzel-title">${messageTitle}</h3>
       <p class="slide-subtitle">${messageDesc}</p>
