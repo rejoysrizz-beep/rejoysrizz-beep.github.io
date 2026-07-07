@@ -1136,14 +1136,20 @@ function handleGlobalSearch(val) {
       resultsContainer.classList.add('hidden');
       document.getElementById('global-search').value = '';
       
-      // Navigate to profile tab directly
+      // Navigate to tree tab instead of profile tab
       document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
-      const profileBtn = document.querySelector('.nav-item[data-tab="profile"]');
-      if (profileBtn) profileBtn.classList.add('active');
+      const treeBtn = document.querySelector('.nav-item[data-tab="tree"]');
+      if (treeBtn) treeBtn.classList.add('active');
       
-      activeProfileMemberId = m.id;
-      currentTab = 'profile';
+      currentTab = 'tree';
       renderActiveTab();
+
+      // Focus/center on the tree card silently after rendering
+      setTimeout(() => {
+        if (typeof focusOnTreeCard === 'function') {
+          focusOnTreeCard(m.id, false); // false means select/highlight silently, do not open profile drawer
+        }
+      }, 50);
     };
 
     div.innerHTML = `

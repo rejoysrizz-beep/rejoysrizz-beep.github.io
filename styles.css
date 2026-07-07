@@ -3277,6 +3277,10 @@ h1, h2, h3, h4, h5, h6 {
   bottom: -11px;
   left: calc(50% - 11px);
 }
+.vertical-view .toggle-parents {
+  left: -11px;
+  top: calc(50% - 11px);
+}
 
 /* For Horizontal View (Generations go top-to-bottom, siblings left-to-right) */
 .horizontal-view .toggle-children {
@@ -3286,6 +3290,10 @@ h1, h2, h3, h4, h5, h6 {
 .horizontal-view .toggle-siblings {
   right: -11px;
   top: calc(50% - 11px);
+}
+.horizontal-view .toggle-parents {
+  top: -11px;
+  left: calc(50% - 11px);
 }
 
 /* Additional layout fixes for smooth scaling */

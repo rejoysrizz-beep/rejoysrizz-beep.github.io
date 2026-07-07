@@ -23,6 +23,9 @@ window.treeOrientation = localStorage.getItem('yoyovayo_tree_orientation') || 'v
 // --- EXPAND/COLLAPSE GLOBAL STATE ---
 window.collapsedChildren = window.collapsedChildren || null;
 window.collapsedSiblings = window.collapsedSiblings || null;
+window.collapsedParents = window.collapsedParents || null;
+window.searchFocusMemberId = window.searchFocusMemberId || null;
+
 
 
 // --- INITIALIZE INTERACTIVE CANVAS ---
@@ -304,6 +307,24 @@ function getFilteredTreeMembers() {
 }
 
 /**
+ * Helper to recursively find all ancestors of a member.
+ */
+function getAncestors(memberId, ancestors = new Set()) {
+  const m = familyData.find(x => x.id === memberId);
+  if (!m) return ancestors;
+
+  if (m.fatherId && !ancestors.has(m.fatherId)) {
+    ancestors.add(m.fatherId);
+    getAncestors(m.fatherId, ancestors);
+  }
+  if (m.motherId && !ancestors.has(m.motherId)) {
+    ancestors.add(m.motherId);
+    getAncestors(m.motherId, ancestors);
+  }
+  return ancestors;
+}
+
+/**
  * Processes the active branch and filters members recursively based on active expand/collapse states.
  */
 function computeVisibleMembers() {
@@ -311,36 +332,85 @@ function computeVisibleMembers() {
   if (filtered.length === 0) return [];
 
   // Default to collapse all if uninitialized
-  if (!window.collapsedChildren || !window.collapsedSiblings) {
-    window.collapsedChildren = new Set();
-    window.collapsedSiblings = new Set();
-    familyData.forEach(m => {
-      const hasChildren = familyData.some(x => x.fatherId === m.id || x.motherId === m.id);
-      if (hasChildren) {
-        window.collapsedChildren.add(m.id);
-      }
-    });
+  if (!window.collapsedChildren || !window.collapsedSiblings || !window.collapsedParents) {
+    if (!window.collapsedChildren) {
+      window.collapsedChildren = new Set();
+      familyData.forEach(m => {
+        const hasChildren = familyData.some(x => x.fatherId === m.id || x.motherId === m.id);
+        if (hasChildren) {
+          window.collapsedChildren.add(m.id);
+        }
+      });
+    }
+    if (!window.collapsedSiblings) {
+      window.collapsedSiblings = new Set();
+    }
+    if (!window.collapsedParents) {
+      window.collapsedParents = new Set();
+    }
   }
 
-  // Find root members within the filtered set
-  let roots = filtered.filter(m => {
-    const hasFather = m.fatherId && filtered.some(p => p.id === m.fatherId);
-    const hasMother = m.motherId && filtered.some(p => p.id === m.motherId);
+  // Compute hidden ancestors based on collapsedParents
+  const hiddenAncestors = new Set();
+  filtered.forEach(m => {
+    if (window.collapsedParents.has(m.id)) {
+      if (m.fatherId) {
+        hiddenAncestors.add(m.fatherId);
+        getAncestors(m.fatherId, hiddenAncestors);
+      }
+      if (m.motherId) {
+        hiddenAncestors.add(m.motherId);
+        getAncestors(m.motherId, hiddenAncestors);
+      }
+    }
+  });
+
+  // Also include spouses of hidden ancestors so they disappear together
+  const extraSpouses = [];
+  hiddenAncestors.forEach(id => {
+    const m = familyData.find(x => x.id === id);
+    if (m && m.spouseId) {
+      extraSpouses.push(m.spouseId);
+    }
+  });
+  extraSpouses.forEach(id => hiddenAncestors.add(id));
+
+  // Filter candidate pool to exclude hidden ancestors
+  const candidates = filtered.filter(m => !hiddenAncestors.has(m.id));
+  if (candidates.length === 0) return [];
+
+  // Find root members within the candidates set
+  let roots = candidates.filter(m => {
+    const hasFather = m.fatherId && candidates.some(p => p.id === m.fatherId);
+    const hasMother = m.motherId && candidates.some(p => p.id === m.motherId);
     if (hasFather || hasMother) return false;
 
     if (m.spouseId) {
-      const spouse = filtered.find(s => s.id === m.spouseId);
+      const spouse = candidates.find(s => s.id === m.spouseId);
       if (spouse) {
-        const spouseHasFather = spouse.fatherId && filtered.some(p => p.id === spouse.fatherId);
-        const spouseHasMother = spouse.motherId && filtered.some(p => p.id === spouse.motherId);
+        const spouseHasFather = spouse.fatherId && candidates.some(p => p.id === spouse.fatherId);
+        const spouseHasMother = spouse.motherId && candidates.some(p => p.id === spouse.motherId);
         if (spouseHasFather || spouseHasMother) return false;
       }
     }
+
+    // Exclude root siblings if one of their siblings is collapsed/focused in collapsedSiblings
+    const siblings = candidates.filter(x => 
+      x.id !== m.id && (
+        (m.fatherId && x.fatherId === m.fatherId) ||
+        (m.motherId && x.motherId === m.motherId)
+      )
+    );
+    const hasCollapsedSibling = siblings.some(sib => window.collapsedSiblings && window.collapsedSiblings.has(sib.id));
+    if (hasCollapsedSibling && window.collapsedSiblings && !window.collapsedSiblings.has(m.id)) {
+      return false;
+    }
+
     return true;
   });
 
-  if (roots.length === 0 && filtered.length > 0) {
-    roots = [filtered[0]];
+  if (roots.length === 0 && candidates.length > 0) {
+    roots = [candidates[0]];
   }
 
   const visible = new Set();
@@ -349,12 +419,12 @@ function computeVisibleMembers() {
     if (visible.has(memberId)) return;
     visible.add(memberId);
 
-    const m = filtered.find(x => x.id === memberId);
+    const m = candidates.find(x => x.id === memberId);
     if (!m) return;
 
     // Add spouse if any
     if (m.spouseId) {
-      const spouse = filtered.find(x => x.id === m.spouseId);
+      const spouse = candidates.find(x => x.id === m.spouseId);
       if (spouse) {
         visible.add(m.spouseId);
       }
@@ -366,7 +436,7 @@ function computeVisibleMembers() {
       return;
     }
 
-    let children = filtered.filter(x => x.fatherId === m.id || x.motherId === m.id);
+    let children = candidates.filter(x => x.fatherId === m.id || x.motherId === m.id);
     if (typeof sortSiblings === 'function') {
       children = sortSiblings(children);
     }
@@ -388,13 +458,66 @@ function computeVisibleMembers() {
     traverse(root.id);
   });
 
-  return filtered.filter(m => visible.has(m.id));
+  // If search focus is active, restrict visible set to only the connected component of the search focus member
+  if (window.searchFocusMemberId && visible.has(window.searchFocusMemberId)) {
+    const connected = new Set();
+    const queue = [window.searchFocusMemberId];
+    connected.add(window.searchFocusMemberId);
+
+    while (queue.length > 0) {
+      const currId = queue.shift();
+      const curr = candidates.find(x => x.id === currId);
+      if (curr) {
+        // Find all immediate relatives in the visible set:
+        const relatives = [];
+
+        // 1. Spouse
+        if (curr.spouseId && visible.has(curr.spouseId)) {
+          relatives.push(curr.spouseId);
+        }
+        // 2. Father
+        if (curr.fatherId && visible.has(curr.fatherId)) {
+          relatives.push(curr.fatherId);
+        }
+        // 3. Mother
+        if (curr.motherId && visible.has(curr.motherId)) {
+          relatives.push(curr.motherId);
+        }
+        // 4. Children (where curr is father or mother)
+        candidates.forEach(x => {
+          if ((x.fatherId === currId || x.motherId === currId) && visible.has(x.id)) {
+            relatives.push(x.id);
+          }
+        });
+        // 5. Reverse spouse lookup
+        candidates.forEach(x => {
+          if (x.spouseId === currId && visible.has(x.id)) {
+            relatives.push(x.id);
+          }
+        });
+
+        relatives.forEach(relId => {
+          if (!connected.has(relId)) {
+            connected.add(relId);
+            queue.push(relId);
+          }
+        });
+      }
+    }
+
+    // Replace visible with connected
+    visible.clear();
+    connected.forEach(id => visible.add(id));
+  }
+
+  return candidates.filter(m => visible.has(m.id));
 }
 window.computeVisibleMembers = computeVisibleMembers;
 
 function expandAll() {
   window.collapsedChildren = new Set();
   window.collapsedSiblings = new Set();
+  window.collapsedParents = new Set();
   renderFamilyTree();
   showGenericAlert('Expanded the entire family tree!', 'info');
 }
@@ -403,6 +526,7 @@ window.expandAll = expandAll;
 function collapseAll() {
   window.collapsedChildren = new Set();
   window.collapsedSiblings = new Set();
+  window.collapsedParents = new Set();
   familyData.forEach(m => {
     const hasChildren = familyData.some(x => x.fatherId === m.id || x.motherId === m.id);
     if (hasChildren) {
@@ -462,9 +586,28 @@ function toggleSiblings(memberId, event) {
 }
 window.toggleSiblings = toggleSiblings;
 
+function toggleParents(memberId, event) {
+  if (event) event.stopPropagation();
+  const m = familyData.find(x => x.id === memberId);
+  if (!m) return;
+
+  const isCollapsed = window.collapsedParents.has(m.id);
+
+  if (isCollapsed) {
+    window.collapsedParents.delete(m.id);
+  } else {
+    window.collapsedParents.add(m.id);
+  }
+
+  renderFamilyTree();
+}
+window.toggleParents = toggleParents;
+
 function clearCollapsedStates() {
   window.collapsedChildren = null;
   window.collapsedSiblings = null;
+  window.collapsedParents = null;
+  window.searchFocusMemberId = null;
 }
 window.clearCollapsedStates = clearCollapsedStates;
 
@@ -475,8 +618,14 @@ function expandAncestors(memberId, skipRender = false) {
   let needsRender = false;
 
   // Initialize if uninitialized
-  if (!window.collapsedChildren || !window.collapsedSiblings) {
+  if (!window.collapsedChildren || !window.collapsedSiblings || !window.collapsedParents) {
     computeVisibleMembers(); // This forces initialization of default collapse states
+  }
+
+  // Remove memberId from window.collapsedParents to expand their parents
+  if (window.collapsedParents && window.collapsedParents.has(memberId)) {
+    window.collapsedParents.delete(memberId);
+    needsRender = true;
   }
 
   // 1. Expand parents/ancestors
@@ -519,6 +668,66 @@ function expandAncestors(memberId, skipRender = false) {
 }
 window.expandAncestors = expandAncestors;
 
+/**
+ * Ensures a member is visible with both parents and children open/expanded,
+ * then renders the tree.
+ */
+function openMemberInTree(memberId) {
+  const m = familyData.find(x => x.id === memberId);
+  if (!m) return;
+
+  // Set active search focus member
+  window.searchFocusMemberId = memberId;
+
+  // Initialize collapse states cleanly
+  window.collapsedParents = new Set();
+  window.collapsedChildren = new Set();
+  window.collapsedSiblings = new Set();
+
+  // 1. Collapse grandparents (parents of parents) and spouse's parents
+  if (m.fatherId) {
+    window.collapsedParents.add(m.fatherId);
+  }
+  if (m.motherId) {
+    window.collapsedParents.add(m.motherId);
+  }
+  if (m.spouseId) {
+    window.collapsedParents.add(m.spouseId);
+  }
+
+  // 2. Collapse grandchildren (children of the member's children)
+  const children = familyData.filter(x => 
+    x.fatherId === memberId || 
+    x.motherId === memberId || 
+    (m.spouseId && (x.fatherId === m.spouseId || x.motherId === m.spouseId))
+  );
+  children.forEach(child => {
+    window.collapsedChildren.add(child.id);
+  });
+
+  // 3. Hide siblings of the member
+  window.collapsedSiblings.add(memberId);
+
+  // 4. Hide siblings of the parents
+  if (m.fatherId) {
+    window.collapsedSiblings.add(m.fatherId);
+  }
+  if (m.motherId) {
+    window.collapsedSiblings.add(m.motherId);
+  }
+
+  // 5. Show reset button so the user can easily restore the full tree
+  const resetBtn = document.getElementById('search-reset-btn');
+  if (resetBtn) {
+    resetBtn.classList.remove('hidden');
+    safeCreateIcons();
+  }
+
+  // Render tree to apply state changes
+  renderFamilyTree();
+}
+window.openMemberInTree = openMemberInTree;
+
 
 /**
  * Isolate tree focus to a chosen branch.
@@ -544,6 +753,7 @@ function isolateTreeBranch(memberId) {
  */
 function resetTreeBranchFocus() {
   focusedBranchRootId = null;
+  clearCollapsedStates();
   
   const resetBtn = document.getElementById('search-reset-btn');
   if (resetBtn) {
@@ -1154,6 +1364,16 @@ function renderStandardTree() {
       `;
     }
 
+    const hasParents = (m.fatherId && familyData.some(x => x.id === m.fatherId)) || (m.motherId && familyData.some(x => x.id === m.motherId));
+    if (hasParents) {
+      const isParentsCollapsed = window.collapsedParents.has(m.id);
+      togglesHtml += `
+        <div class="tree-node-toggle toggle-parents" title="${isParentsCollapsed ? 'Expand Parents' : 'Collapse Parents'}" onclick="toggleParents('${m.id}', event)">
+          <i data-lucide="${isParentsCollapsed ? 'plus' : 'minus'}"></i>
+        </div>
+      `;
+    }
+
     card.innerHTML = `
       <div class="card-badges">${badgesHtml}</div>
       <div class="card-avatar-wrapper">
@@ -1225,7 +1445,9 @@ function closeInfoDrawer() {
  * @param {boolean} triggerClick If true, opens the inspector panel
  */
 function focusOnTreeCard(memberId, triggerClick = true) {
-  if (typeof expandAncestors === 'function') {
+  if (typeof openMemberInTree === 'function') {
+    openMemberInTree(memberId);
+  } else if (typeof expandAncestors === 'function') {
     expandAncestors(memberId);
   }
   const card = document.querySelector(`.family-card[data-id="${memberId}"]`);
