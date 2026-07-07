@@ -3113,6 +3113,76 @@ h1, h2, h3, h4, h5, h6 {
     width: 20px;
     height: 20px;
   }
+
+  /* Header Search responsiveness to prevent overflows */
+  .header-search {
+    flex: 1;
+    min-width: 0;
+    margin: 0 8px;
+    gap: 8px;
+    justify-content: flex-start;
+  }
+
+  .search-box {
+    flex: 1;
+    min-width: 0;
+    width: auto; /* let it shrink dynamically */
+  }
+
+  /* Make sure search input placeholder adapts elegantly on very small screens */
+  .search-box input {
+    font-size: 12px;
+    padding: 6px 10px 6px 28px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  .search-results {
+    width: 100%;
+    top: calc(100% + 4px);
+    left: 0;
+  }
+
+  .header-actions {
+    gap: 8px; /* reduce gap to save space */
+  }
+
+  .theme-toggle-btn,
+  .lock-toggle-btn {
+    width: 34px;
+    height: 34px; /* slightly more compact but still premium touch target */
+  }
+}
+
+/* Custom overrides for very narrow mobile screens (<= 480px) to keep search box fully visible */
+@media (max-width: 480px) {
+  #search-reset-btn .btn-text {
+    display: none;
+  }
+  #search-reset-btn {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 50%; /* sleek circular close/reset button */
+    flex-shrink: 0;
+  }
+  
+  .header-search {
+    margin: 0 4px;
+    gap: 6px;
+  }
+
+  .header-actions {
+    gap: 4px; /* even tighter actions layout */
+  }
+
+  .theme-toggle-btn,
+  .lock-toggle-btn {
+    width: 30px;
+    height: 30px;
+  }
 }
 
 /* ================================================================= */
