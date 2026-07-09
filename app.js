@@ -2832,10 +2832,12 @@ function profileSetAsFocus(memberId) {
   currentTab = 'tree';
   renderActiveTab();
 
-  // 2. Trigger branch focus and isolate the tree branch
-  if (typeof isolateTreeBranch === 'function') {
-    isolateTreeBranch(memberId);
-  }
+  // 2. Trigger the exact same unified search focus and zoom behavior as a search result
+  setTimeout(() => {
+    if (typeof focusOnTreeCard === 'function') {
+      focusOnTreeCard(memberId, false); // select/highlight silently on the tree canvas
+    }
+  }, 50);
 }
 
 // =================================================================
