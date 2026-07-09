@@ -379,6 +379,9 @@ function openAddMemberModal(relationType = null, relationSourceId = null) {
   // Populate Relation dropdowns with list of everyone in tree
   populateRelationDropdowns();
 
+  // Reset Child select field
+  document.getElementById('form-child-id').value = '';
+
   // Security settings section removed.
 
   // If adding linked member, prepopulate parents or spouses to avoid errors
@@ -398,11 +401,13 @@ function openAddMemberModal(relationType = null, relationSourceId = null) {
         document.getElementById('form-spouse-id').value = sourceMember.id;
       } else if (relationType === 'father') {
         document.getElementById('form-gender').value = 'Male';
+        document.getElementById('form-child-id').value = sourceMember.id; // PREPOPULATE child dropdown
         if (sourceMember.motherId) {
           document.getElementById('form-spouse-id').value = sourceMember.motherId;
         }
       } else if (relationType === 'mother') {
         document.getElementById('form-gender').value = 'Female';
+        document.getElementById('form-child-id').value = sourceMember.id; // PREPOPULATE child dropdown
         if (sourceMember.fatherId) {
           document.getElementById('form-spouse-id').value = sourceMember.fatherId;
         }
@@ -411,6 +416,11 @@ function openAddMemberModal(relationType = null, relationSourceId = null) {
         // Handled by adding parent first then linking in code
       }
     }
+  }
+
+  // Update inline parent buttons visibility (will be hidden since it's a new member creation)
+  if (typeof updateInlineParentButtons === 'function') {
+    updateInlineParentButtons();
   }
 
   document.getElementById('member-modal').classList.remove('hidden');
@@ -452,7 +462,6 @@ function openEditMemberModal(memberId) {
   } else {
     window.isPhoneManuallyEdited = false;
   }
-  document.getElementById('form-notes').value = member.notes || '';
   document.getElementById('form-avatar-url').value = member.avatarUrl || '';
   document.getElementById('form-instagram-id').value = member.instagramId || '';
   document.getElementById('form-hide-age').checked = !!member.hideAge;
@@ -464,6 +473,12 @@ function openEditMemberModal(memberId) {
   document.getElementById('form-mother-id').value = member.motherId || '';
   document.getElementById('form-spouse-id').value = member.spouseId || '';
   document.getElementById('form-marriage-date').value = member.marriageDate || '';
+  document.getElementById('form-child-id').value = ''; // Reset child select in edit mode
+
+  // Update inline parent buttons visibility (will show father/mother inline buttons if missing)
+  if (typeof updateInlineParentButtons === 'function') {
+    updateInlineParentButtons();
+  }
 
   // Security settings section removed.
 
@@ -475,6 +490,54 @@ function openEditMemberModal(memberId) {
 function closeMemberModal() {
   document.getElementById('member-modal').classList.add('hidden');
 }
+
+function triggerAddParentInline(type) {
+  const memberId = document.getElementById('form-member-id').value;
+  if (!memberId) {
+    showGenericAlert('Error: You can only add a parent inline when editing an existing member.', 'warning');
+    return;
+  }
+  // Open the add member modal for father/mother linked to this member
+  openAddMemberModal(type, memberId);
+}
+
+function updateInlineParentButtons() {
+  const memberId = document.getElementById('form-member-id').value;
+  const fatherId = document.getElementById('form-father-id').value;
+  const motherId = document.getElementById('form-mother-id').value;
+  const buttonsRow = document.getElementById('form-add-parents-buttons-row');
+  const fatherContainer = document.getElementById('btn-add-father-container');
+  const motherContainer = document.getElementById('btn-add-mother-container');
+
+  if (!memberId || !buttonsRow || !fatherContainer || !motherContainer) {
+    if (buttonsRow) buttonsRow.style.display = 'none';
+    return;
+  }
+
+  let showRow = false;
+  if (!fatherId) {
+    fatherContainer.style.display = 'block';
+    showRow = true;
+  } else {
+    fatherContainer.style.display = 'none';
+  }
+
+  if (!motherId) {
+    motherContainer.style.display = 'block';
+    showRow = true;
+  } else {
+    motherContainer.style.display = 'none';
+  }
+
+  if (showRow) {
+    buttonsRow.style.display = 'flex';
+  } else {
+    buttonsRow.style.display = 'none';
+  }
+}
+
+window.triggerAddParentInline = triggerAddParentInline;
+window.updateInlineParentButtons = updateInlineParentButtons;
 
 function toggleDeceasedFields(isDeceased) {
   const deathGroup = document.getElementById('death-date-group');
@@ -494,11 +557,15 @@ function populateRelationDropdowns(excludeId = null) {
   const fatherSelect = document.getElementById('form-father-id');
   const motherSelect = document.getElementById('form-mother-id');
   const spouseSelect = document.getElementById('form-spouse-id');
+  const childSelect = document.getElementById('form-child-id');
 
   // Clear original except first
   fatherSelect.innerHTML = '<option value="">None (Root Branch)</option>';
   motherSelect.innerHTML = '<option value="">None (Root Branch)</option>';
   spouseSelect.innerHTML = '<option value="">None</option>';
+  if (childSelect) {
+    childSelect.innerHTML = '<option value="">None</option>';
+  }
 
   familyData.forEach(m => {
     if (excludeId && m.id === excludeId) return; // Cannot link to themselves!
@@ -515,6 +582,9 @@ function populateRelationDropdowns(excludeId = null) {
     }
 
     spouseSelect.appendChild(opt.cloneNode(true));
+    if (childSelect) {
+      childSelect.appendChild(opt.cloneNode(true));
+    }
   });
 }
 
@@ -524,6 +594,7 @@ function handleMemberFormSubmit(e) {
   const id = document.getElementById('form-member-id').value;
   const relationType = document.getElementById('form-relation-type').value;
   const relationSourceId = document.getElementById('form-relation-source-id').value;
+  const childId = document.getElementById('form-child-id').value;
 
   const isDeceased = document.getElementById('form-is-deceased').checked;
 
@@ -546,7 +617,6 @@ function handleMemberFormSubmit(e) {
     phone: isDeceased ? '' : document.getElementById('form-phone').value.trim(),
     callPhone: isDeceased ? '' : document.getElementById('form-call-phone').value.trim(),
     email: isDeceased ? '' : document.getElementById('form-email').value.trim(),
-    notes: document.getElementById('form-notes').value.trim(),
     avatarUrl: document.getElementById('form-avatar-url').value.trim(),
     instagramId: document.getElementById('form-instagram-id').value.trim(),
     hideAge: document.getElementById('form-hide-age').checked,
@@ -582,6 +652,18 @@ function handleMemberFormSubmit(e) {
         } else if (relationType === 'child') {
           // Relates automatically because child records hold fatherId/motherId
         }
+      }
+    }
+  }
+
+  // Handle manual child relation dropdown selection
+  if (childId) {
+    const child = familyData.find(x => x.id === childId);
+    if (child) {
+      if (memberObj.gender === 'Female') {
+        child.motherId = memberObj.id;
+      } else {
+        child.fatherId = memberObj.id;
       }
     }
   }
@@ -1202,7 +1284,7 @@ function exportXlsxFamilyData() {
 
   const headers = [
     'ID', 'First Name', 'Last Name', 'Nickname', 'Gender', 'Is Deceased',
-    'Birth Date', 'Death Date', 'Phone', 'Calling Phone', 'Email', 'Biography Notes',
+    'Birth Date', 'Death Date', 'Phone', 'Calling Phone', 'Email',
     'Avatar URL', 'Instagram ID', 'Hide Age', 'Hide Contact Details',
     'Father ID', 'Mother ID', 'Spouse ID', 'Marriage Date', 'System Role'
   ];
@@ -1222,7 +1304,6 @@ function exportXlsxFamilyData() {
       m.phone ? String(m.phone) : '',
       m.callPhone ? String(m.callPhone) : '',
       String(m.email || ''),
-      String(m.notes || ''),
       String(m.avatarUrl || ''),
       String(m.instagramId || ''),
       m.hideAge ? 'TRUE' : 'FALSE',
@@ -1740,7 +1821,7 @@ function formatDateToDdMmmYyyy(dateStr) {
 function downloadXlsxTemplate() {
   const headers = [
     'ID', 'First Name', 'Last Name', 'Nickname', 'Gender', 'Is Deceased',
-    'Birth Date', 'Death Date', 'Phone', 'Calling Phone', 'Email', 'Biography Notes',
+    'Birth Date', 'Death Date', 'Phone', 'Calling Phone', 'Email',
     'Father ID', 'Mother ID', 'Spouse ID', 'Marriage Date', 'System Role'
   ];
 
@@ -1748,19 +1829,16 @@ function downloadXlsxTemplate() {
     [
       'grandpa_sam', 'Samuel', 'Smith', 'Sam', 'Male', 'FALSE',
       '15-Jun-1945', '', '919496123778', '+919496123778', 'samuel@smith.com',
-      'The root grandfather of our family tree. Enthusiastic gardener, loved woodcarving.',
       '', '', '', '10-Oct-1970', 'super_admin'
     ],
     [
       'grandma_mary', 'Mary', 'Smith', 'Nana', 'Female', 'FALSE',
       '22-Nov-1950', '', '+15559876543', '+15559876543', 'mary@smith.com',
-      'Beloved grandmother. Master baker of apple pies and avid reader.',
       '', '', 'grandpa_sam', '10-Oct-1970', 'member'
     ],
     [
       'son_john', 'John', 'Smith', 'Johnny', 'Male', 'FALSE',
       '12-Apr-1975', '', '+15551112222', '+15551112222', 'johnny@smith.com',
-      'Enjoys fly fishing and mentoring junior developers.',
       'grandpa_sam', 'grandma_mary', '', '', 'member'
     ]
   ];
@@ -1904,7 +1982,6 @@ function importBulkXlsx(event) {
             return formatInternationalPhone(rawPhone);
           })(),
           email: isDeceased ? '' : String(cleanRec['email'] || cleanRec['mail'] || '').trim(),
-          notes: String(cleanRec['biographynotes'] || cleanRec['notes'] || cleanRec['bio'] || cleanRec['biography'] || cleanRec['story'] || '').trim(),
           avatarUrl: String(cleanRec['avatarurl'] || '').trim(),
           instagramId: String(cleanRec['instagramid'] || '').trim(),
           hideAge: String(cleanRec['hideage'] || '').toLowerCase().trim() === 'true',

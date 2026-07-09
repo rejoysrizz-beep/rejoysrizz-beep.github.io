@@ -351,16 +351,16 @@
     <div class="modal-content member-modal-content glass">
       <button class="modal-close" onclick="closeMemberModal()">&times;</button>
       <h2 class="cinzel-title" id="member-modal-title">Add Family Member</h2>
-      <p class="modal-subtitle" id="member-modal-subtitle">Define biography details and link family relationships.</p>
+      <p class="modal-subtitle" id="member-modal-subtitle">Define profile details and link family relationships.</p>
 
       <form id="member-form" onsubmit="handleMemberFormSubmit(event)">
         <input type="hidden" id="form-member-id">
         <input type="hidden" id="form-relation-type"> <!-- Used when adding linked members -->
         <input type="hidden" id="form-relation-source-id"> <!-- ID of person we are linking from -->
 
-        <!-- Section 1: Core Biography -->
+        <!-- Section 1: Core Profile -->
         <div class="form-section">
-          <h4><i data-lucide="user"></i> Basic Biography</h4>
+          <h4><i data-lucide="user"></i> Basic Details</h4>
           <div class="form-row-2">
             <div class="form-group">
               <label for="form-first-name">First Name *</label>
@@ -453,34 +453,40 @@
           </div>
         </div>
 
-        <!-- Section 4: Notes and Biography -->
-        <div class="form-section">
-          <h4><i data-lucide="scroll"></i> Biography & Stories</h4>
-          <div class="form-group">
-            <label for="form-notes">Anecdotes, accomplishments, and memory snippets</label>
-            <textarea id="form-notes" rows="3" placeholder="Share a few details about their life, career, achievements, and beautiful moments..."></textarea>
-          </div>
-        </div>
-
         <!-- Section 5: Relationships (ONLY visible when creating/editing directly, hidden if creating via relative binding) -->
         <div class="form-section" id="form-section-relations">
-          <h4><i data-lucide="users"></i> Parent & Spouse Bindings</h4>
+          <h4><i data-lucide="users"></i> Relationship Bindings</h4>
           <p class="form-section-desc">Establish connections inside the database tree.</p>
           <div class="form-row-2">
             <div class="form-group">
               <label for="form-father-id">Father</label>
-              <select id="form-father-id">
+              <select id="form-father-id" onchange="updateInlineParentButtons()">
                 <option value="">None (Root Branch)</option>
               </select>
             </div>
             <div class="form-group">
               <label for="form-mother-id">Mother</label>
-              <select id="form-mother-id">
+              <select id="form-mother-id" onchange="updateInlineParentButtons()">
                 <option value="">None (Root Branch)</option>
               </select>
             </div>
           </div>
-          <div class="form-row-2">
+
+          <!-- Quick Add Parent Buttons Row -->
+          <div class="form-row-2 margin-top-8" id="form-add-parents-buttons-row" style="display: none;">
+            <div class="form-group" id="btn-add-father-container">
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-add-father-inline" onclick="triggerAddParentInline('father')" style="width: 100%; justify-content: center; font-size: 11px; padding: 8px 10px; display: flex; align-items: center; gap: 6px;">
+                <i data-lucide="plus-circle" style="width: 14px; height: 14px;"></i> Add Father
+              </button>
+            </div>
+            <div class="form-group" id="btn-add-mother-container">
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-add-mother-inline" onclick="triggerAddParentInline('mother')" style="width: 100%; justify-content: center; font-size: 11px; padding: 8px 10px; display: flex; align-items: center; gap: 6px;">
+                <i data-lucide="plus-circle" style="width: 14px; height: 14px;"></i> Add Mother
+              </button>
+            </div>
+          </div>
+
+          <div class="form-row-2 margin-top-12">
             <div class="form-group">
               <label for="form-spouse-id">Primary Spouse / Partner</label>
               <select id="form-spouse-id">
@@ -490,6 +496,18 @@
             <div class="form-group" id="marriage-date-group">
               <label for="form-marriage-date">Wedding Anniversary Date</label>
               <input type="date" id="form-marriage-date">
+            </div>
+          </div>
+
+          <div class="form-row-2 margin-top-12">
+            <div class="form-group">
+              <label for="form-child-id">Child (This member is their Parent)</label>
+              <select id="form-child-id">
+                <option value="">None</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <!-- Grid balancing placeholder -->
             </div>
           </div>
         </div>

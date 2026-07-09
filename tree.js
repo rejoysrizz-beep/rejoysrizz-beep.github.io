@@ -720,26 +720,28 @@ function toggleParents(memberId, event) {
   const filtered = computeVisibleMembers();
   const parentsVisible = (m.fatherId && filtered.some(x => x.id === m.fatherId)) || (m.motherId && filtered.some(x => x.id === m.motherId));
 
-  if (parentsVisible) {
-    // If parents are visible and this is NOT the current search focus (meaning it's a child card),
-    // set focus on this card and hide parents and siblings.
-    if (window.searchFocusMemberId && m.id !== window.searchFocusMemberId) {
-      // Helper to collect all descendants of m
-      const getDescendantIds = (id, set = new Set()) => {
-        set.add(id);
-        const member = familyData.find(x => x.id === id);
-        if (member && member.spouseId) {
-          set.add(member.spouseId);
-        }
-        const children = familyData.filter(x => x.fatherId === id || x.motherId === id);
-        children.forEach(child => {
-          if (!set.has(child.id)) {
-            getDescendantIds(child.id, set);
-          }
-        });
-        return set;
-      };
+  // Helper to collect all descendants of a given member ID
+  const getDescendantIds = (id, set = new Set()) => {
+    set.add(id);
+    const member = familyData.find(x => x.id === id);
+    if (member && member.spouseId) {
+      set.add(member.spouseId);
+    }
+    const children = familyData.filter(x => x.fatherId === id || x.motherId === id);
+    children.forEach(child => {
+      if (!set.has(child.id)) {
+        getDescendantIds(child.id, set);
+      }
+    });
+    return set;
+  };
 
+  if (parentsVisible) {
+    // If parents are visible and this is NOT the current search focus, AND it is a descendant (child card)
+    // of the current search focus, set focus on this card and hide parents and siblings.
+    const isDescendantOfFocus = window.searchFocusMemberId ? getDescendantIds(window.searchFocusMemberId).has(m.id) : false;
+
+    if (window.searchFocusMemberId && m.id !== window.searchFocusMemberId && isDescendantOfFocus) {
       const descendantsOfM = getDescendantIds(m.id);
       const openDescendantParentIds = new Set();
       descendantsOfM.forEach(id => {
@@ -1500,7 +1502,7 @@ function renderStandardTree() {
         const childX = c.x;
         const childY = c.y + CARD_HEIGHT / 2;
 
-        const routeX = parentAnchorX + 30;
+        const routeX = childX - 30;
         const pathData = `
           M ${parentAnchorX} ${parentAnchorY}
           L ${routeX} ${parentAnchorY}
