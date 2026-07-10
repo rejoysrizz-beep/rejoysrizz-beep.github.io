@@ -506,8 +506,11 @@
                 <option value="">None</option>
               </select>
             </div>
-            <div class="form-group">
-              <!-- Grid balancing placeholder -->
+            <div class="form-group" id="form-add-child-button-row" style="display: none;">
+              <label style="visibility: hidden; margin-bottom: 6px; display: block;">Spacer</label>
+              <button type="button" class="btn btn-secondary" id="btn-add-child-inline" onclick="triggerAddChildInline()" style="width: 100%; justify-content: center; font-size: 13px; padding: 10px 14px; border-radius: 10px; display: flex; align-items: center; gap: 6px; box-sizing: border-box; font-weight: 600; line-height: 1.5; border: 1px solid var(--border-color); height: 42px;">
+                <i data-lucide="plus-circle" style="width: 14px; height: 14px;"></i> Add Child
+              </button>
             </div>
           </div>
         </div>

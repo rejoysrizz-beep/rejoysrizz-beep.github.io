@@ -501,6 +501,16 @@ function triggerAddParentInline(type) {
   openAddMemberModal(type, memberId);
 }
 
+function triggerAddChildInline() {
+  const memberId = document.getElementById('form-member-id').value;
+  if (!memberId) {
+    showGenericAlert('Error: You can only add a child inline when editing an existing member.', 'warning');
+    return;
+  }
+  // Open the add member modal for child linked to this member
+  openAddMemberModal('child', memberId);
+}
+
 function updateInlineParentButtons() {
   const memberId = document.getElementById('form-member-id').value;
   const fatherId = document.getElementById('form-father-id').value;
@@ -508,6 +518,16 @@ function updateInlineParentButtons() {
   const buttonsRow = document.getElementById('form-add-parents-buttons-row');
   const fatherContainer = document.getElementById('btn-add-father-container');
   const motherContainer = document.getElementById('btn-add-mother-container');
+  const childRow = document.getElementById('form-add-child-button-row');
+
+  // Handle child button visibility
+  if (childRow) {
+    if (memberId) {
+      childRow.style.display = 'block';
+    } else {
+      childRow.style.display = 'none';
+    }
+  }
 
   if (!memberId || !buttonsRow || !fatherContainer || !motherContainer) {
     if (buttonsRow) buttonsRow.style.display = 'none';
@@ -537,6 +557,7 @@ function updateInlineParentButtons() {
 }
 
 window.triggerAddParentInline = triggerAddParentInline;
+window.triggerAddChildInline = triggerAddChildInline;
 window.updateInlineParentButtons = updateInlineParentButtons;
 
 function toggleDeceasedFields(isDeceased) {
