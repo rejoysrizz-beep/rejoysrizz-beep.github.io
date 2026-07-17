@@ -1279,6 +1279,30 @@ document.addEventListener('click', (e) => {
 // DATA EXPORT, IMPORT, & DEMO DATA DATASETS
 // =================================================================
 
+const XOR_KEY = "ALLGLORYTOGODALMIGHTY";
+
+function xorObfuscate(inputStr, key = XOR_KEY) {
+  const encoder = new TextEncoder();
+  const dataBytes = encoder.encode(inputStr);
+  const keyBytes = encoder.encode(key);
+  const obfuscatedBytes = new Uint8Array(dataBytes.length);
+  for (let i = 0; i < dataBytes.length; i++) {
+    obfuscatedBytes[i] = dataBytes[i] ^ keyBytes[i % keyBytes.length];
+  }
+  return obfuscatedBytes;
+}
+
+function xorDeobfuscate(obfuscatedBytes, key = XOR_KEY) {
+  const encoder = new TextEncoder();
+  const keyBytes = encoder.encode(key);
+  const deobfuscatedBytes = new Uint8Array(obfuscatedBytes.length);
+  for (let i = 0; i < obfuscatedBytes.length; i++) {
+    deobfuscatedBytes[i] = obfuscatedBytes[i] ^ keyBytes[i % keyBytes.length];
+  }
+  const decoder = new TextDecoder();
+  return decoder.decode(deobfuscatedBytes);
+}
+
 function exportFamilyData() {
   if (familyData.length === 0) {
     showGenericAlert('Aborted: Cannot export an empty database.', 'warning');
@@ -1289,11 +1313,21 @@ function exportFamilyData() {
     familyData: familyData,
     sharedAlbums: sharedAlbums
   };
-  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(payload, null, 2));
+
+  const jsonStr = JSON.stringify(payload);
+  const obfuscatedBytes = xorObfuscate(jsonStr);
+  
+  const blob = new Blob([obfuscatedBytes], { type: "application/octet-stream" });
+  const dataUrl = URL.createObjectURL(blob);
+  
   const dlAnchorElem = document.createElement('a');
-  dlAnchorElem.setAttribute("href", dataStr);
+  dlAnchorElem.setAttribute("href", dataUrl);
   dlAnchorElem.setAttribute("download", "yoyovayo_backup_" + getFormattedDate() + ".json");
   dlAnchorElem.click();
+  
+  // Clean up URL object after click
+  setTimeout(() => URL.revokeObjectURL(dataUrl), 100);
+  
   showGenericAlert('Backup file exported successfully!', 'success');
 }
 
@@ -1366,7 +1400,28 @@ function importFamilyData(event) {
   const reader = new FileReader();
   reader.onload = function(e) {
     try {
-      const parsed = JSON.parse(e.target.result);
+      const buffer = e.target.result;
+      const bytes = new Uint8Array(buffer);
+      
+      let parsed = null;
+      let isPlaintextParsed = false;
+      
+      // 1. Try parsing as plaintext UTF-8 JSON first (Backward compatibility)
+      try {
+        const decoder = new TextDecoder('utf-8', { fatal: true });
+        const plaintextStr = decoder.decode(bytes);
+        parsed = JSON.parse(plaintextStr);
+        isPlaintextParsed = true;
+      } catch (plainErr) {
+        // Plaintext parse failed or contains non-UTF-8 binary data. Proceed to XOR deobfuscation.
+      }
+      
+      // 2. If plaintext fallback failed, decode using XOR Deobfuscation
+      if (!isPlaintextParsed) {
+        const decodedStr = xorDeobfuscate(bytes);
+        parsed = JSON.parse(decodedStr);
+      }
+      
       if (Array.isArray(parsed)) {
         familyData = parsed;
         sharedAlbums = [];
@@ -1393,10 +1448,11 @@ function importFamilyData(event) {
       renderActiveTab();
       showGenericAlert('Backup imported successfully! Database refreshed.', 'success');
     } catch (err) {
+      console.error(err);
       showGenericAlert('Error: Failed to parse backup file.', 'danger');
     }
   };
-  reader.readAsText(file);
+  reader.readAsArrayBuffer(file);
 }
 
 function clearFamilyData() {
