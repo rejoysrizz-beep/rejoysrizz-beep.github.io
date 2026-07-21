@@ -114,6 +114,23 @@ function getEventsForOffset(offset) {
       }
     }
 
+    // 2b. Death Anniversaries (Only if deceased and has a deathDate)
+    if (m.deathDate && m.isDeceased) {
+      const dDate = new Date(m.deathDate);
+      if (!isNaN(dDate.getTime())) {
+        if (dDate.getMonth() === tMonth && dDate.getDate() === tDay) {
+          const yearsPassed = targetDate.getFullYear() - dDate.getFullYear();
+          events.push({
+            member: m,
+            type: 'death_anniversary',
+            title: 'Death Anniversary',
+            milestone: yearsPassed > 0 ? yearsPassed : null,
+            emoji: '🕊️'
+          });
+        }
+      }
+    }
+
     // 3. Wedding Anniversaries
     if (m.marriageDate && m.spouseId && m.id < m.spouseId) {
       const annivDate = new Date(m.marriageDate);
@@ -239,8 +256,20 @@ function renderDaySlideContent() {
           <i data-lucide="message-square"></i> Wish Anniversary on WhatsApp
         </button>`;
       }
+    } else if (ev.type === 'death_anniversary') {
+      // Remembrance Death Anniversary
+      messageTitle = `Remembering <span class="celebration-clickable-name" onclick="viewProfileFromCelebration('${ev.member.id}')" title="Click to view profile">${ev.member.firstName}</span> 🕊️`;
+      const milestoneText = (ev.milestone && !hideAgeVal) ? `${ev.milestone} Years ` : '';
+      messageDesc = `${milestoneText}since their passing. Keeping their beautiful spirit, laughter, and wisdom forever tucked inside our family memory vaults. 🕯️`;
+      
+      decorationHtml = `
+        <div class="slide-deco">
+          <div class="deco-item">🕯️</div>
+          <div class="deco-item delay-1">🕊️</div>
+        </div>
+      `;
     } else {
-      // Remembrance Deceased Day
+      // Remembrance Deceased Birth Day
       messageTitle = `Remembering <span class="celebration-clickable-name" onclick="viewProfileFromCelebration('${ev.member.id}')" title="Click to view profile">${ev.member.firstName}</span> 🕊️`;
       const milestoneText = (ev.milestone && !hideAgeVal) ? `${ev.milestone}th ` : '';
       messageDesc = `${milestoneText}Memorial Birth Anniversary. Keeping their beautiful life achievements, laughter, and wisdom forever tucked inside our family memory vaults. 🕯️`;
@@ -253,7 +282,7 @@ function renderDaySlideContent() {
       `;
     }
 
-    const tagLabel = ev.type === 'death' ? 'In Remembrance' : ev.title;
+    const tagLabel = (ev.type === 'death' || ev.type === 'death_anniversary') ? 'In Remembrance' : ev.title;
 
     const isMarriage = ev.type === 'marriage';
     const ringClass = isMarriage ? 'slide-avatar-ring anniversary-ring' : 'slide-avatar-ring';
@@ -613,7 +642,7 @@ function updateCelebrationBackground() {
   if (activeEvent.type === 'birthday') {
     portal.style.background = 'radial-gradient(circle at center, #0f0f23 0%, #030308 100%)';
     if (bgDecor) bgDecor.innerHTML = '';
-  } else if (activeEvent.type === 'death') {
+  } else if (activeEvent.type === 'death' || activeEvent.type === 'death_anniversary') {
     // Remembrance Day - tranquil, lighted gold-amber candlelight glow
     portal.style.background = 'radial-gradient(circle at center, #1b130e 0%, #020204 100%)';
     
@@ -625,9 +654,9 @@ function updateCelebrationBackground() {
         const delay = (Math.random() * 2).toFixed(1);
         candlesHtml += `
           <div class="candle" style="height: ${height}px; left: ${left}vw; animation-delay: -${delay}s;">
-            <div class="candle-body"></div>
-            <div class="candle-wick"></div>
             <div class="candle-flame"></div>
+            <div class="candle-wick"></div>
+            <div class="candle-body" style="flex: 1;"></div>
             <div class="candle-glow"></div>
           </div>
         `;
@@ -736,7 +765,7 @@ function createFloatingElement() {
     const string = document.createElement('div');
     string.className = 'balloon-string';
     b.appendChild(string);
-  } else if (type === 'death') {
+  } else if (type === 'death' || type === 'death_anniversary') {
     // Remembrance: lighted candles and flying white doves
     b.className = 'floating-item-emoji';
     const items = ['🕯️', '🕊️', '✨', '🕯️'];

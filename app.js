@@ -830,7 +830,7 @@ function calculateUpcomingEvents() {
       }
     }
 
-    // 2. Memorial Remembrance (For deceased members)
+    // 2. Memorial Remembrance (For deceased members - Birth Anniversary)
     if (m.birthDate && m.isDeceased) {
       const info = getEventCountdown(m.birthDate);
       if (info) {
@@ -843,6 +843,24 @@ function calculateUpcomingEvents() {
           daysRemaining: info.daysRemaining,
           milestone: info.targetAgeOrAnniv,
           originalDate: m.birthDate,
+          sortDate: info.eventDateThisYear
+        });
+      }
+    }
+
+    // 2b. Death Anniversary (For deceased members - Passing Remembrance)
+    if (m.deathDate && m.isDeceased) {
+      const info = getEventCountdown(m.deathDate);
+      if (info) {
+        events.push({
+          memberId: m.id,
+          member: m,
+          type: 'death_anniversary',
+          emoji: '🕊️',
+          title: 'Death Anniversary',
+          daysRemaining: info.daysRemaining,
+          milestone: info.targetAgeOrAnniv,
+          originalDate: m.deathDate,
           sortDate: info.eventDateThisYear
         });
       }
@@ -1076,6 +1094,8 @@ function renderEventsTimeline() {
     const spouseId = heroEvent.spouseId || heroEvent.member.spouseId;
     const hideSpouseAge = spouseId ? shouldHideAge(spouseId) : false;
     heroDesc = (hideAgeVal || hideSpouseAge) ? `Celebrating Wedding Anniversary!` : `Celebrating ${heroEvent.milestone} years of marriage`;
+  } else if (heroEvent.type === 'death_anniversary') {
+    heroDesc = hideAgeVal ? `Death Anniversary Remembrance` : `Death Anniversary Remembrance (${heroEvent.milestone} Years Passed)`;
   } else {
     heroDesc = hideAgeVal ? `Remembrance Birth Anniversary` : `Remembrance Birth Anniversary (${heroEvent.milestone}th Year)`;
   }
@@ -1129,6 +1149,8 @@ function renderEventsTimeline() {
       subText = hideAgeVal ? `🎂 Celebrating Birthday on ${formatMonthDay(ev.originalDate)}` : `🎂 Turning <strong>${ev.milestone}</strong> on ${formatMonthDay(ev.originalDate)}`;
     } else if (ev.type === 'marriage') {
       subText = (hideAgeVal || hideSpouseAge) ? `💖 Celebrating Wedding Anniversary on ${formatMonthDay(ev.originalDate)}` : `💖 Celebrating <strong>${ev.milestone}</strong> years of marriage on ${formatMonthDay(ev.originalDate)}`;
+    } else if (ev.type === 'death_anniversary') {
+      subText = hideAgeVal ? `🕊️ Remembrance: Death anniversary on ${formatMonthDay(ev.originalDate)}` : `🕊️ Remembrance: <strong>${ev.milestone} years passed</strong> since their death on ${formatMonthDay(ev.originalDate)}`;
     } else {
       subText = hideAgeVal ? `🕊️ Remembrance: Birth anniversary on ${formatMonthDay(ev.originalDate)}` : `🕊️ Remembrance: <strong>${ev.milestone}th</strong> birth anniversary on ${formatMonthDay(ev.originalDate)}`;
     }
@@ -1191,7 +1213,8 @@ function renderEventsTimeline() {
       const filter = btn.getAttribute('data-filter');
       
       document.querySelectorAll('.timeline-card').forEach(card => {
-        if (filter === 'all' || card.getAttribute('data-event-type') === filter) {
+        const type = card.getAttribute('data-event-type');
+        if (filter === 'all' || type === filter || (filter === 'death' && type === 'death_anniversary')) {
           card.classList.remove('hidden');
         } else {
           card.classList.add('hidden');
@@ -1279,30 +1302,6 @@ document.addEventListener('click', (e) => {
 // DATA EXPORT, IMPORT, & DEMO DATA DATASETS
 // =================================================================
 
-const XOR_KEY = "ALLGLORYTOGODALMIGHTY";
-
-function xorObfuscate(inputStr, key = XOR_KEY) {
-  const encoder = new TextEncoder();
-  const dataBytes = encoder.encode(inputStr);
-  const keyBytes = encoder.encode(key);
-  const obfuscatedBytes = new Uint8Array(dataBytes.length);
-  for (let i = 0; i < dataBytes.length; i++) {
-    obfuscatedBytes[i] = dataBytes[i] ^ keyBytes[i % keyBytes.length];
-  }
-  return obfuscatedBytes;
-}
-
-function xorDeobfuscate(obfuscatedBytes, key = XOR_KEY) {
-  const encoder = new TextEncoder();
-  const keyBytes = encoder.encode(key);
-  const deobfuscatedBytes = new Uint8Array(obfuscatedBytes.length);
-  for (let i = 0; i < obfuscatedBytes.length; i++) {
-    deobfuscatedBytes[i] = obfuscatedBytes[i] ^ keyBytes[i % keyBytes.length];
-  }
-  const decoder = new TextDecoder();
-  return decoder.decode(deobfuscatedBytes);
-}
-
 function exportFamilyData() {
   if (familyData.length === 0) {
     showGenericAlert('Aborted: Cannot export an empty database.', 'warning');
@@ -1313,21 +1312,11 @@ function exportFamilyData() {
     familyData: familyData,
     sharedAlbums: sharedAlbums
   };
-
-  const jsonStr = JSON.stringify(payload);
-  const obfuscatedBytes = xorObfuscate(jsonStr);
-  
-  const blob = new Blob([obfuscatedBytes], { type: "application/octet-stream" });
-  const dataUrl = URL.createObjectURL(blob);
-  
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(payload, null, 2));
   const dlAnchorElem = document.createElement('a');
-  dlAnchorElem.setAttribute("href", dataUrl);
+  dlAnchorElem.setAttribute("href", dataStr);
   dlAnchorElem.setAttribute("download", "yoyovayo_backup_" + getFormattedDate() + ".json");
   dlAnchorElem.click();
-  
-  // Clean up URL object after click
-  setTimeout(() => URL.revokeObjectURL(dataUrl), 100);
-  
   showGenericAlert('Backup file exported successfully!', 'success');
 }
 
@@ -1400,28 +1389,7 @@ function importFamilyData(event) {
   const reader = new FileReader();
   reader.onload = function(e) {
     try {
-      const buffer = e.target.result;
-      const bytes = new Uint8Array(buffer);
-      
-      let parsed = null;
-      let isPlaintextParsed = false;
-      
-      // 1. Try parsing as plaintext UTF-8 JSON first (Backward compatibility)
-      try {
-        const decoder = new TextDecoder('utf-8', { fatal: true });
-        const plaintextStr = decoder.decode(bytes);
-        parsed = JSON.parse(plaintextStr);
-        isPlaintextParsed = true;
-      } catch (plainErr) {
-        // Plaintext parse failed or contains non-UTF-8 binary data. Proceed to XOR deobfuscation.
-      }
-      
-      // 2. If plaintext fallback failed, decode using XOR Deobfuscation
-      if (!isPlaintextParsed) {
-        const decodedStr = xorDeobfuscate(bytes);
-        parsed = JSON.parse(decodedStr);
-      }
-      
+      const parsed = JSON.parse(e.target.result);
       if (Array.isArray(parsed)) {
         familyData = parsed;
         sharedAlbums = [];
@@ -1448,11 +1416,10 @@ function importFamilyData(event) {
       renderActiveTab();
       showGenericAlert('Backup imported successfully! Database refreshed.', 'success');
     } catch (err) {
-      console.error(err);
       showGenericAlert('Error: Failed to parse backup file.', 'danger');
     }
   };
-  reader.readAsArrayBuffer(file);
+  reader.readAsText(file);
 }
 
 function clearFamilyData() {
@@ -1488,6 +1455,11 @@ function showEmptyDatabaseWelcome() {
     existing.remove();
   }
 
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+  const showInstallWelcomeBtn = !isStandalone && (isIOS || !!window.deferredPrompt);
+
   // Create a brand new empty welcome card element
   const welcome = document.createElement('div');
   welcome.className = 'empty-welcome-card glass text-center';
@@ -1495,6 +1467,7 @@ function showEmptyDatabaseWelcome() {
     <h2>🌳 Welcome to YoyoVayo!</h2>
     <p>Your collaborative family tree database is currently empty.</p>
     <div class="flex flex-wrap gap-12 justify-content-center margin-top-16" style="display: flex; flex-direction: column; align-items: center; gap: 12px;">
+      ${showInstallWelcomeBtn ? `<button id="welcome-pwa-install-btn" class="btn btn-primary btn-glow" onclick="triggerPwaWelcomeInstall()" style="width: 250px; justify-content: center;"><i data-lucide="download"></i> Install Yoyovayo App</button>` : ''}
       <button class="btn btn-success btn-glow" onclick="openAddMemberModal()" style="width: 250px; justify-content: center;"><i data-lucide="plus-circle"></i> Create First Member (You)</button>
       <button class="btn btn-secondary btn-glow" onclick="document.getElementById('import-file-input').click()" style="width: 250px; justify-content: center;"><i data-lucide="upload"></i> Restore from Backup</button>
       <button class="btn btn-secondary btn-glow" onclick="revealWelcomeWebRestore()" style="width: 250px; justify-content: center;"><i data-lucide="globe"></i> Restore from Web</button>
@@ -1631,6 +1604,20 @@ function calculateAge(birthDateString) {
   let age = today.getFullYear() - birth.getFullYear();
   const m = today.getMonth() - birth.getMonth();
   if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+    age--;
+  }
+  return age;
+}
+
+function calculateAgeAtDeath(birthDateString, deathDateString) {
+  if (!birthDateString || !deathDateString) return null;
+  const birth = new Date(birthDateString);
+  const death = new Date(deathDateString);
+  if (isNaN(birth.getTime()) || isNaN(death.getTime())) return null;
+  
+  let age = death.getFullYear() - birth.getFullYear();
+  const m = death.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && death.getDate() < birth.getDate())) {
     age--;
   }
   return age;
@@ -2601,6 +2588,29 @@ function renderFullUserProfilePage() {
   const age = shouldHideAge(member.id) ? null : calculateAge(member.birthDate);
   const zodiac = member.birthDate ? getZodiacSign(member.birthDate) : null;
 
+  let lifeStatsHtml = `<span>📅 ${getYearRange(member)}</span>`;
+  if (member.isDeceased) {
+    if (!shouldHideAge(member.id)) {
+      const bornAgo = calculateAge(member.birthDate);
+      const diedAgo = calculateAge(member.deathDate);
+      const agedAtDeath = calculateAgeAtDeath(member.birthDate, member.deathDate);
+      if (bornAgo !== null) {
+        lifeStatsHtml += `<span>• Born: ${bornAgo} Years Ago</span>`;
+      }
+      if (diedAgo !== null) {
+        const agedStr = agedAtDeath !== null ? ` (aged ${agedAtDeath})` : '';
+        lifeStatsHtml += `<span>• Died${agedStr} ${diedAgo} Years Ago</span>`;
+      }
+    }
+  } else {
+    if (age !== null) {
+      lifeStatsHtml += `<span>• 🎂 ${age} Years Old</span>`;
+    }
+  }
+  if (zodiac) {
+    lifeStatsHtml += `<span>• ✨ ${zodiac}</span>`;
+  }
+
   // 5. Gather Contact Info
   let contactHtml = '';
   const isContactsHidden = shouldHideContacts(member.id);
@@ -2834,9 +2844,7 @@ function renderFullUserProfilePage() {
               </div>
 
               <div class="profile-life-stats">
-                <span>📅 ${getYearRange(member)}</span>
-                ${age !== null ? `<span>• 🎂 ${age} Years Old</span>` : ''}
-                ${zodiac ? `<span>• ✨ ${zodiac}</span>` : ''}
+                ${lifeStatsHtml}
               </div>
             </div>
           </div>
@@ -3207,10 +3215,23 @@ window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   // Stash the event so it can be triggered later.
   window.deferredPrompt = e;
-  // Update UI to notify the user they can install the PWA
+  
+  // Update side menu install button
   const installBtn = document.getElementById('pwa-install-btn');
   if (installBtn) {
     installBtn.style.display = 'flex';
+  }
+
+  // Also update empty welcome screen button if currently shown
+  const welcomeInstallBtn = document.getElementById('welcome-pwa-install-btn');
+  if (welcomeInstallBtn) {
+    welcomeInstallBtn.style.display = 'flex';
+  } else {
+    // If the welcome screen is currently showing, re-render to include the button
+    const emptyWelcome = document.querySelector('.empty-welcome-card');
+    if (emptyWelcome && typeof renderEmptyWelcomeScreen === 'function') {
+      renderEmptyWelcomeScreen();
+    }
   }
 });
 
@@ -3220,8 +3241,35 @@ window.addEventListener('appinstalled', (evt) => {
   if (installBtn) {
     installBtn.style.display = 'none';
   }
+  const welcomeInstallBtn = document.getElementById('welcome-pwa-install-btn');
+  if (welcomeInstallBtn) {
+    welcomeInstallBtn.style.display = 'none';
+  }
   window.deferredPrompt = null;
 });
+
+async function triggerPwaWelcomeInstall() {
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (isIOS) {
+    showIosInstallModal();
+    return;
+  }
+
+  if (!window.deferredPrompt) {
+    showGenericAlert('The app is either already installed or installation is not supported on this browser/environment.', 'info');
+    return;
+  }
+  window.deferredPrompt.prompt();
+  const { outcome } = await window.deferredPrompt.userChoice;
+  console.log(`User response to the welcome screen PWA install prompt: ${outcome}`);
+  if (outcome === 'accepted') {
+    window.deferredPrompt = null;
+    const btn = document.getElementById('welcome-pwa-install-btn');
+    if (btn) btn.style.display = 'none';
+  }
+}
+window.triggerPwaWelcomeInstall = triggerPwaWelcomeInstall;
 
 // iOS PWA Guidance Modal Toggle Handlers
 function showIosInstallModal() {

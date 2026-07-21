@@ -1745,7 +1745,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 .candle-body {
   width: 100%;
-  height: 100%;
+  flex: 1;
   background: linear-gradient(to right, #eeddbb, #ffffff 30%, #eeddbb 70%, #d4bc8c 100%);
   border-radius: 4px 4px 0 0;
   box-shadow: inset 0 3px 6px rgba(255,255,255,0.4), 0 2px 4px rgba(0,0,0,0.3);
