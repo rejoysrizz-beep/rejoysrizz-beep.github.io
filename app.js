@@ -3229,8 +3229,8 @@ window.addEventListener('beforeinstallprompt', (e) => {
   } else {
     // If the welcome screen is currently showing, re-render to include the button
     const emptyWelcome = document.querySelector('.empty-welcome-card');
-    if (emptyWelcome && typeof renderEmptyWelcomeScreen === 'function') {
-      renderEmptyWelcomeScreen();
+    if (emptyWelcome && typeof showEmptyDatabaseWelcome === 'function') {
+      showEmptyDatabaseWelcome();
     }
   }
 });
