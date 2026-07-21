@@ -109,6 +109,17 @@ document.addEventListener('DOMContentLoaded', () => {
   // 3. Trigger initial view render
   renderActiveTab();
 
+  // 3.1. Check if we just toggled the lock edit mode to show alert after refresh
+  const toggledAlert = sessionStorage.getItem('yoyovayo_edit_mode_toggled');
+  if (toggledAlert) {
+    sessionStorage.removeItem('yoyovayo_edit_mode_toggled');
+    if (window.isEditMode) {
+      showGenericAlert('Application switched to Edit Mode. Modifications are unlocked.', 'success');
+    } else {
+      showGenericAlert('Application locked in View Mode. Modifications are hidden.', 'info');
+    }
+  }
+
   // 3.5. Initialize PWA Install Button Click Handler
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
                 (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -329,8 +340,22 @@ function updateEditModeUI() {
 function toggleEditModeGlobal() {
   window.isEditMode = !window.isEditMode;
   localStorage.setItem('yoyovayo_edit_mode', window.isEditMode ? 'true' : 'false');
+  
+  // 1. Update general Edit Mode UI widgets and badges
   updateEditModeUI();
   
+  // 2. Re-render the active tab (refreshes profile view, tree view, events, albums, settings, etc. in place)
+  if (typeof renderActiveTab === 'function') {
+    renderActiveTab();
+  }
+  
+  // 3. If on empty database welcome screen, re-render that too
+  const emptyWelcome = document.querySelector('.empty-welcome-card');
+  if (emptyWelcome && typeof showEmptyDatabaseWelcome === 'function') {
+    showEmptyDatabaseWelcome();
+  }
+  
+  // 4. Show the feedback notification toast to the user
   if (window.isEditMode) {
     showGenericAlert('Application switched to Edit Mode. Modifications are unlocked.', 'success');
   } else {
