@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Madamana! Legacy Continues</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0d0f12">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <!-- Google Fonts: Outfit (modern sans) and Cinzel (elegant serif headings) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Lucide Icons via CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- SheetJS (XLSX) library via CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body class="dark-theme">
+
+  <!-- Simulated SMS toast removed since OTP is disabled for local-only use. -->
+
+  <!-- ================================================================= -->
+  <!-- IMMERSIVE CELEBRATION FLASH PAGE OVERLAY -->
+  <!-- ================================================================= -->
+  <div id="celebration-portal" class="celebration-portal hidden">
+    <!-- Ambient Decor Background Layer -->
+    <div id="celebration-bg-decor" class="celebration-bg-decor"></div>
+    <!-- Visual Effect Canvases -->
+    <canvas id="confetti-canvas"></canvas>
+    <canvas id="fireworks-canvas"></canvas>
+    <div id="balloon-container" class="balloon-container"></div>
+
+    <div class="celebration-content">
+      <div class="celebration-header">
+        <h2 class="cinzel-title">Family Celebrations</h2>
+        <p class="celebration-subtitle">Keeping the family milestones alive</p>
+      </div>
+
+      <!-- Horizontal Day Slider -->
+      <div class="slider-outer">
+        <button id="slide-prev" class="slider-btn" title="Previous Day">
+          <i data-lucide="chevron-left"></i>
+        </button>
+
+        <div class="slider-viewport">
+          <div id="slider-track" class="slider-track">
+            <!-- Dynamic celebration slides are loaded here -->
+          </div>
+        </div>
+
+        <button id="slide-next" class="slider-btn" title="Next Day">
+          <i data-lucide="chevron-right"></i>
+        </button>
+      </div>
+
+      <div class="celebration-actions">
+        <button class="btn btn-primary btn-glow" onclick="closeCelebrationPortal()">
+          <i data-lucide="tree-pine"></i> Enter Family Tree
+        </button>
+      </div>
+
+      <div class="celebration-footer">
+        Designed by Rejoy Varghese Kelamparambil
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================= -->
+  <!-- MAIN APPLICATION CONTAINER -->
+  <!-- ================================================================= -->
+  <div class="app-container">
+    <div class="sidebar-backdrop" id="sidebar-backdrop" onclick="hideMobileSidebar()"></div>
+    
+    <!-- SIDEBAR NAVIGATION -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-logo">🌳</div>
+        <div class="brand-text">
+          <h1 class="cinzel-title" style="letter-spacing: 1.5px; font-size: 20px;">Madamana</h1>
+          <span style="font-size: 10px; font-weight: 700; color: var(--gold); letter-spacing: 2px;">Legacy Continues</span>
+        </div>
+      </div>
+
+      <nav class="nav-menu">
+        <button class="nav-item active" data-tab="tree">
+          <i data-lucide="git-fork" class="rotate-90"></i>
+          <span>Family Tree</span>
+        </button>
+        <button class="nav-item btn-celebrate-shortcut" onclick="openCelebrationPortalForce()">
+          <span class="animated-emoji">🎂</span>
+          <span>Celebrations</span>
+        </button>
+        <button class="nav-item" data-tab="events">
+          <i data-lucide="calendar-heart"></i>
+          <span>Milestones</span>
+        </button>
+        <button class="nav-item" data-tab="gallery">
+          <i data-lucide="images"></i>
+          <span>Shared Albums</span>
+        </button>
+
+        <button class="nav-item" data-tab="profile">
+          <i data-lucide="user"></i>
+          <span>Member Profile</span>
+        </button>
+
+        <button class="nav-item" data-tab="settings">
+          <i data-lucide="settings-2"></i>
+          <span>Backup & Control</span>
+        </button>
+
+        <!-- PWA INSTALL COMPANION -->
+        <button id="pwa-install-btn" class="nav-item" style="display: none; margin-top: 24px; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 12px; color: var(--gold); border-radius: 8px;">
+          <i data-lucide="smartphone" style="color: var(--gold);"></i>
+          <span style="font-weight: 600;">Add to Home</span>
+        </button>
+      </nav>
+    </aside>
+
+    <!-- MAIN DASHBOARD CONTENT AREA -->
+    <main class="main-content">
+      
+      <!-- HEADER WITH SESSION & SECURITY INDICATOR -->
+      <header class="app-header">
+        <button id="mobile-menu-toggle" class="mobile-menu-toggle" onclick="toggleMobileSidebar()" title="Toggle Menu">
+          <i data-lucide="menu"></i>
+        </button>
+        <div class="header-search">
+          <div class="search-box">
+            <i data-lucide="search"></i>
+            <input type="text" id="global-search" placeholder="Search family members..." oninput="handleGlobalSearch(this.value)">
+          </div>
+          <!-- Small Reset Button shown next to universal search box when branch focus is active -->
+          <button id="search-reset-btn" class="btn btn-secondary btn-sm hidden" onclick="resetTreeBranchFocus()" title="Reset Focus Tree">
+            <i data-lucide="x"></i> <span class="btn-text">Reset View</span>
+          </button>
+          <div id="search-results" class="search-results hidden"></div>
+        </div>
+
+        <div class="header-actions">
+          <!-- Light/Dark Mode Switcher -->
+          <button class="theme-toggle-btn" onclick="toggleTheme()" title="Toggle Theme">
+            <i data-lucide="sun" id="theme-icon-sun" class="hidden"></i>
+            <i data-lucide="moon" id="theme-icon-moon"></i>
+          </button>
+
+          <!-- Circular Glassmorphic Lock Toggle Button -->
+          <button id="edit-mode-lock-btn" class="lock-toggle-btn unlocked" onclick="toggleEditModeGlobal()" title="Toggle Edit/View Mode">
+            <i id="lock-icon" data-lucide="lock-open"></i>
+          </button>
+        </div>
+      </header>
+
+      <!-- TAB VIEWPORTS -->
+      <div class="tab-viewport">
+
+        <!-- 1. FAMILY TREE TAB -->
+        <section id="tab-tree" class="tab-pane active">
+
+
+
+
+          <!-- Floating Controls on Tree -->
+          <div class="tree-controls">
+            <button onclick="zoomIn()" title="Zoom In"><i data-lucide="zoom-in"></i></button>
+            <button onclick="zoomOut()" title="Zoom Out"><i data-lucide="zoom-out"></i></button>
+            <button onclick="resetZoom()" title="Recenter tree"><i data-lucide="maximize"></i></button>
+            <button onclick="expandAll()" title="Expand All"><i data-lucide="chevrons-up-down"></i></button>
+            <button onclick="collapseAll()" title="Collapse All"><i data-lucide="chevrons-down-up"></i></button>
+            <button onclick="toggleTreeOrientation()" id="tree-orientation-btn" title="Toggle Sideways/Top-down view"><i data-lucide="git-commit"></i></button>
+            <button onclick="openAddMemberModal()" class="btn-add-floating btn-glow hidden-guest" id="add-member-btn" title="Add Family Member">
+              <i data-lucide="plus"></i> Add Member
+            </button>
+          </div>
+
+          <!-- Tree Interactive Canvas Wrapper -->
+          <div class="tree-canvas-container" id="tree-container">
+            <div class="zoom-pan-layer" id="zoom-layer">
+              <svg id="tree-svg" class="tree-svg"></svg>
+              <div id="tree-nodes" class="tree-nodes"></div>
+            </div>
+          </div>
+
+          <!-- Selected Member Info Sidebar Drawer -->
+          <div id="info-drawer" class="info-drawer hidden">
+            <button class="drawer-close" onclick="closeInfoDrawer()">&times;</button>
+            <div class="drawer-content" id="drawer-content">
+              <!-- Rendered dynamically via JavaScript -->
+            </div>
+          </div>
+        </section>
+
+        <!-- 2. EVENTS / MILESTONES TAB -->
+        <section id="tab-events" class="tab-pane">
+          <div class="pane-header">
+            <div class="pane-title-group">
+              <h2 class="cinzel-title">Family Calendar & Milestones</h2>
+              <p>Upcoming birthdays, wedding anniversaries, and memorial days sorted chronologically.</p>
+            </div>
+            <div class="filter-group">
+              <button class="filter-btn active" data-filter="all">All Events</button>
+              <button class="filter-btn" data-filter="birthday">Birthdays 🎂</button>
+              <button class="filter-btn" data-filter="marriage">Anniversaries 💑</button>
+              <button class="filter-btn" data-filter="death">Remembrances 🕊️</button>
+            </div>
+          </div>
+
+          <div class="events-dashboard">
+            <div class="next-milestone-hero" id="next-milestone-hero">
+              <!-- Rendered dynamically -->
+            </div>
+            <div class="events-timeline" id="events-timeline-list">
+              <!-- Rendered dynamically -->
+            </div>
+          </div>
+        </section>
+
+
+
+        <!-- 5. SHARED PHOTO ALBUMS TAB -->
+        <section id="tab-gallery" class="tab-pane">
+          <div class="pane-header flex justify-content-between align-items-center flex-wrap gap-12" style="display: flex; justify-content: space-between; align-items: center;">
+            <div class="pane-title-group">
+              <h2 class="cinzel-title">Shared Photo Albums</h2>
+              <p>Hyperlinks to Google Photos, SmugMug, and other photo-sharing spaces submitted by family editors.</p>
+            </div>
+            <button class="btn btn-primary btn-glow hidden-guest" id="add-album-btn" onclick="openAddAlbumModal()">
+              <i data-lucide="plus-circle"></i> Add Shared Album
+            </button>
+          </div>
+
+          <div class="gallery-grid" id="gallery-albums-grid">
+            <!-- Dynamic album cards will be rendered here -->
+          </div>
+        </section>
+
+        <!-- 4. SETTINGS / BACKUP & CONTROL TAB -->
+        <section id="tab-settings" class="tab-pane">
+          <div class="pane-header">
+            <h2 class="cinzel-title">Backup & Control Center</h2>
+            <p>Export your family tree backup, restore from a previous save, or download XLSX files to test YoyoVayo!.</p>
+          </div>
+
+          <div class="settings-content">
+            <div class="settings-card glass">
+              <h3><i data-lucide="palette"></i> Display & Appearance Settings</h3>
+              <p>Customize the visual presentation of YoyoVayo! to suit your preferences.</p>
+              
+              <div class="form-group margin-top-16">
+                <label for="settings-theme-select">Interface Theme</label>
+                <select id="settings-theme-select" class="form-control" style="width: 100%; max-width: 320px; padding: 10px; border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-color); margin-top: 6px;" onchange="changeThemePreference(this.value)">
+                  <option value="auto">Auto Adjust (Based on time of day) - Default</option>
+                  <option value="dark">Dark Theme</option>
+                  <option value="light">Light Theme</option>
+                </select>
+              </div>
+
+              <div class="form-group margin-top-16">
+                <label for="settings-font-size-slider" style="display: flex; justify-content: space-between; align-items: center;">
+                  <span>Text Font Size</span>
+                  <span id="font-size-label-val" class="color-gold font-size-12" style="font-weight: 600;">Medium (Default)</span>
+                </label>
+                <div style="display: flex; align-items: center; gap: 12px; margin-top: 8px;">
+                  <span class="font-size-12" style="color: var(--text-secondary);">A</span>
+                  <input type="range" id="settings-font-size-slider" min="0.8" max="1.25" step="0.05" value="1.0" style="flex: 1; accent-color: var(--accent-color); background: var(--border-color); height: 6px; border-radius: 4px; border: none; cursor: pointer;" oninput="handleFontSizeSliderInput(this.value)">
+                  <span class="font-size-18" style="color: var(--text-primary); font-weight: 600;">A</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-card glass hidden-guest">
+              <h3><i data-lucide="database-backup"></i> Backup and Restore</h3>
+              <p>Save your complete family structure (including permissions, notes, and events) into a lightweight JSON file.</p>
+              <div class="settings-actions flex-wrap gap-12">
+                <button class="btn btn-primary" onclick="exportFamilyData()"><i data-lucide="download"></i> Export Family JSON</button>
+                <label class="btn btn-secondary cursor-pointer">
+                  <i data-lucide="upload"></i> Import Backup JSON
+                  <input type="file" id="import-file-input" class="hidden-input" onchange="importFamilyData(event)">
+                </label>
+                <button class="btn btn-secondary" onclick="revealWebRestoreSettings()"><i data-lucide="globe"></i> Restore from Web</button>
+              </div>
+              <div id="web-restore-settings-container" style="display: none; margin-top: 16px; width: 100%;">
+                <div style="display: flex; gap: 8px; width: 100%; max-width: 480px;">
+                  <input type="text" id="web-restore-settings-url" placeholder="https://example.com/family.json" class="form-control" style="flex: 1; padding: 10px; border-radius: 8px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); color: var(--text-primary); font-size: 13px;">
+                  <button class="btn btn-primary" onclick="submitWebRestoreSettings()" style="padding: 10px 16px;">Restore</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-card glass hidden-guest">
+              <h3><i data-lucide="refresh-cw"></i> Database Reset</h3>
+              <p>You can clear your local database to start creating your family tree from scratch.</p>
+              <div class="settings-actions flex-wrap gap-12">
+                <button class="btn btn-danger" onclick="clearFamilyData()"><i data-lucide="trash-2"></i> Wipe Database & Reset</button>
+              </div>
+            </div>
+
+            <div class="settings-card glass hidden" id="admin-bulk-import-card">
+              <h3><i data-lucide="sheet"></i> Bulk Spreadsheet Import/Export</h3>
+              <p>Admins can accelerate tree development by entering data in bulk. Download our structured XLSX template (compatible with Microsoft Excel, Google Sheets, or any spreadsheet editor), enter your family records, import them in a single click, or export the entire tree back to XLSX.</p>
+              <div class="settings-actions flex-wrap gap-12">
+                <button class="btn btn-primary" onclick="downloadXlsxTemplate()"><i data-lucide="file-spreadsheet"></i> Download XLSX Template</button>
+                <button class="btn btn-success btn-glow" onclick="exportXlsxFamilyData()"><i data-lucide="file-spreadsheet"></i> Export Family XLSX</button>
+                <label class="btn btn-secondary cursor-pointer">
+                  <i data-lucide="file-up"></i> Import Spreadsheet XLSX
+                  <input type="file" id="bulk-import-file-input" class="hidden-input" accept=".xlsx" onchange="importBulkXlsx(event)">
+                </label>
+              </div>
+            </div>
+
+            <div class="settings-card glass">
+              <h3><i data-lucide="shield-check"></i> Application Security Mode</h3>
+              <p>Toggle between Edit Mode (to make changes, add members, or import backups) and View Mode (to lock the application and prevent accidental data modifications).</p>
+              
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 16px; background: rgba(255,255,255,0.02); padding: 14px 20px; border-radius: 12px; border: 1px solid var(--border-color); flex-wrap: wrap; gap: 12px; width: 100%;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <span id="settings-mode-icon" style="font-size: 24px;">✍️</span>
+                  <div>
+                    <h4 id="settings-mode-title" style="margin: 0; color: var(--gold); font-weight: 700;">Edit Mode (Unlocked)</h4>
+                    <p id="settings-mode-desc" style="margin: 4px 0 0 0; font-size: 12px; color: var(--text-secondary);">You have full administrator privileges to modify the family tree.</p>
+                  </div>
+                </div>
+                <div>
+                  <button id="toggle-mode-btn" class="btn btn-primary btn-glow" onclick="toggleEditModeGlobal()">Switch to View Mode</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 5. MEMBER PROFILE TAB -->
+        <section id="tab-profile" class="tab-pane">
+          <div class="profile-container-wrapper" id="profile-container-wrapper"></div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+
+
+  <!-- ================================================================= -->
+  <!-- MODAL: ADD / EDIT FAMILY MEMBER -->
+  <!-- ================================================================= -->
+  <div id="member-modal" class="modal hidden">
+    <div class="modal-content member-modal-content glass">
+      <button class="modal-close" onclick="closeMemberModal()">&times;</button>
+      <h2 class="cinzel-title" id="member-modal-title">Add Family Member</h2>
+      <p class="modal-subtitle" id="member-modal-subtitle">Define profile details and link family relationships.</p>
+
+      <form id="member-form" onsubmit="handleMemberFormSubmit(event)">
+        <input type="hidden" id="form-member-id">
+        <input type="hidden" id="form-relation-type"> <!-- Used when adding linked members -->
+        <input type="hidden" id="form-relation-source-id"> <!-- ID of person we are linking from -->
+
+        <!-- Section 1: Core Profile -->
+        <div class="form-section">
+          <h4><i data-lucide="user"></i> Basic Details</h4>
+          <div class="form-row-2">
+            <div class="form-group">
+              <label for="form-first-name">First Name *</label>
+              <input type="text" id="form-first-name" required placeholder="First Name">
+            </div>
+            <div class="form-group">
+              <label for="form-last-name">Last Name *</label>
+              <input type="text" id="form-last-name" required placeholder="Last Name">
+            </div>
+          </div>
+          <div class="form-row-2">
+            <div class="form-group">
+              <label for="form-nickname">Nickname / Also Known As</label>
+              <input type="text" id="form-nickname" placeholder="e.g. Papa, Bobby">
+            </div>
+            <div class="form-group">
+              <label for="form-gender">Gender</label>
+              <select id="form-gender">
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group margin-top-8">
+            <label for="form-avatar-url">Profile Photo URL</label>
+            <input type="url" id="form-avatar-url" placeholder="e.g. https://images.com/myphoto.jpg">
+          </div>
+        </div>
+
+        <!-- Section 2: Dates and Life Status -->
+        <div class="form-section">
+          <h4><i data-lucide="heart-pulse"></i> Life Status & Dates</h4>
+          <div class="form-group">
+            <label class="checkbox-container">
+              <input type="checkbox" id="form-is-deceased" onchange="toggleDeceasedFields(this.checked)">
+              <span class="checkmark"></span>
+              Is this family member deceased? (In Remembrance)
+            </label>
+          </div>
+          <div class="form-row-2">
+            <div class="form-group">
+              <label for="form-birth-date">Birth Date</label>
+              <input type="date" id="form-birth-date">
+            </div>
+            <div class="form-group" id="death-date-group">
+              <label for="form-death-date">Death Date</label>
+              <input type="date" id="form-death-date">
+            </div>
+          </div>
+          <div class="form-group margin-top-12">
+            <label class="checkbox-container">
+              <input type="checkbox" id="form-hide-age">
+              <span class="checkmark"></span>
+              Keep my age secret (hide age/milestone number from other members and guests)
+            </label>
+          </div>
+        </div>
+
+        <!-- Section 3: Contact details -->
+        <div class="form-section" id="form-section-contact">
+          <h4><i data-lucide="phone"></i> Contact Information</h4>
+          <p class="form-section-desc">Used for logging in with OTP and sending WhatsApp milestone greetings.</p>
+          <div class="form-row-2">
+            <div class="form-group">
+              <label for="form-phone">WhatsApp Number</label>
+              <input type="tel" id="form-phone" placeholder="e.g. +15551234567">
+            </div>
+            <div class="form-group">
+              <label for="form-call-phone">Phone Number (Calling) *</label>
+              <input type="tel" id="form-call-phone" placeholder="e.g. +15551234567 or 00...">
+            </div>
+          </div>
+          <div class="form-row-2 margin-top-8">
+            <div class="form-group">
+              <label for="form-email">Email Address</label>
+              <input type="email" id="form-email" placeholder="e.g. name@email.com">
+            </div>
+            <div class="form-group">
+              <label for="form-instagram-id">Instagram Username</label>
+              <input type="text" id="form-instagram-id" placeholder="e.g. john_doe">
+            </div>
+          </div>
+          <div class="form-group margin-top-12">
+            <label class="checkbox-container">
+              <input type="checkbox" id="form-hide-contacts">
+              <span class="checkmark"></span>
+              Keep my contact details secret (hide contact details and greeting buttons from other members and guests)
+            </label>
+          </div>
+        </div>
+
+        <!-- Section 5: Relationships (ONLY visible when creating/editing directly, hidden if creating via relative binding) -->
+        <div class="form-section" id="form-section-relations">
+          <h4><i data-lucide="users"></i> Relationship Bindings</h4>
+          <p class="form-section-desc">Establish connections inside the database tree.</p>
+          <div class="form-row-2">
+            <div class="form-group">
+              <label for="form-father-id">Father</label>
+              <select id="form-father-id" onchange="updateInlineParentButtons()">
+                <option value="">None (Root Branch)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="form-mother-id">Mother</label>
+              <select id="form-mother-id" onchange="updateInlineParentButtons()">
+                <option value="">None (Root Branch)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Quick Add Parent Buttons Row -->
+          <div class="form-row-2 margin-top-8" id="form-add-parents-buttons-row" style="display: none;">
+            <div class="form-group" id="btn-add-father-container">
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-add-father-inline" onclick="triggerAddParentInline('father')" style="width: 100%; justify-content: center; font-size: 11px; padding: 8px 10px; display: flex; align-items: center; gap: 6px;">
+                <i data-lucide="plus-circle" style="width: 14px; height: 14px;"></i> Add Father
+              </button>
+            </div>
+            <div class="form-group" id="btn-add-mother-container">
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-add-mother-inline" onclick="triggerAddParentInline('mother')" style="width: 100%; justify-content: center; font-size: 11px; padding: 8px 10px; display: flex; align-items: center; gap: 6px;">
+                <i data-lucide="plus-circle" style="width: 14px; height: 14px;"></i> Add Mother
+              </button>
+            </div>
+          </div>
+
+          <div class="form-row-2 margin-top-12">
+            <div class="form-group">
+              <label for="form-spouse-id">Spouse</label>
+              <select id="form-spouse-id">
+                <option value="">None</option>
+              </select>
+            </div>
+            <div class="form-group" id="marriage-date-group">
+              <label for="form-marriage-date">Wedding Date</label>
+              <input type="date" id="form-marriage-date">
+            </div>
+          </div>
+
+          <div class="form-row-2 margin-top-12">
+            <div class="form-group">
+              <label for="form-child-id">Child</label>
+              <select id="form-child-id">
+                <option value="">None</option>
+              </select>
+            </div>
+            <div class="form-group" id="form-add-child-button-row" style="display: none;">
+              <label style="visibility: hidden; margin-bottom: 6px; display: block;">Spacer</label>
+              <button type="button" class="btn btn-secondary" id="btn-add-child-inline" onclick="triggerAddChildInline()" style="width: 100%; justify-content: center; font-size: 13px; padding: 10px 14px; border-radius: 10px; display: flex; align-items: center; gap: 6px; box-sizing: border-box; font-weight: 600; line-height: 1.5; border: 1px solid var(--border-color); height: 42px;">
+                <i data-lucide="plus-circle" style="width: 14px; height: 14px;"></i> Add Child
+              </button>
+            </div>
+          </div>
+        </div>
+
+
+
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" onclick="closeMemberModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary btn-glow" id="form-submit-btn">Save Member details <i data-lucide="save"></i></button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ================================================================= -->
+  <!-- MODAL: WHATSAPP GREETING PORTAL -->
+  <!-- ================================================================= -->
+  <div id="greeting-modal" class="modal hidden">
+    <div class="modal-content greeting-modal-content glass">
+      <button class="modal-close" onclick="closeGreetingModal()">&times;</button>
+      <div class="greeting-decor">💬</div>
+      <h2 class="cinzel-title">WhatsApp Greeting Portal</h2>
+      <p class="modal-subtitle" id="greeting-modal-subtitle">Draft a beautiful milestone message and send it directly via WhatsApp.</p>
+
+      <div class="greeting-recipient-banner">
+        <div id="greet-avatar" class="greet-recipient-avatar">👤</div>
+        <div>
+          <div id="greet-name" class="greet-recipient-name">Robert Jefferson</div>
+          <div id="greet-details" class="greet-recipient-details">Celebrating Birthday Today! 🎉</div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Select a Greeting Template</label>
+        <div class="template-selector" id="greeting-templates-list">
+          <!-- Dynamic template chips loaded here -->
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="greeting-message-body">Personalize Your Message</label>
+        <textarea id="greeting-message-body" rows="6" class="textarea-greeting" placeholder="Write something heartfelt..."></textarea>
+      </div>
+
+      <div class="greeting-actions">
+        <button class="btn btn-secondary" onclick="copyGreetingToClipboard()">
+          <i data-lucide="copy"></i> Copy to Clipboard
+        </button>
+        <button class="btn btn-success btn-glow" onclick="launchWhatsAppGreeting()">
+          Send on WhatsApp <i data-lucide="external-link"></i>
+        </button>
+      </div>
+    </div>
+  </div>  <!-- ================================================================= -->
+  <!-- MODAL: ADD / EDIT SHARED ALBUM -->
+  <!-- ================================================================= -->
+  <div id="album-modal" class="modal hidden">
+    <div class="modal-content album-modal-content glass">
+      <button class="modal-close" onclick="closeAlbumModal()">&times;</button>
+      <div class="login-decor">🖼️</div>
+      <h2 class="cinzel-title" id="album-modal-title">Add Shared Album</h2>
+      <p class="modal-subtitle">Submit hyperlinks to Google Photos, SmugMug, or other family albums.</p>
+
+      <form id="album-form" onsubmit="handleAlbumFormSubmit(event)">
+        <input type="hidden" id="form-album-id">
+        <div class="form-group">
+          <label for="form-album-title">Album Title *</label>
+          <input type="text" id="form-album-title" required placeholder="e.g. Summer Family Reunion 2025">
+        </div>
+        <div class="form-group">
+          <label for="form-album-url">Album Hyperlink (URL) *</label>
+          <input type="url" id="form-album-url" required placeholder="e.g. https://photos.google.com/share/...">
+        </div>
+        <div class="form-group">
+          <label for="form-album-desc">Brief Description / What to expect *</label>
+          <textarea id="form-album-desc" rows="3" required placeholder="e.g. A collection of over 200 high-resolution memories from our lakehouse retreat..."></textarea>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" onclick="closeAlbumModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary btn-glow" id="form-album-submit-btn">Save Album Details <i data-lucide="save"></i></button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ================================================================= -->
+  <!-- MODAL: MERGE STARTING SUPER ADMIN ON BULK IMPORT -->
+  <!-- ================================================================= -->
+  <div id="merge-modal" class="modal hidden">
+    <div class="modal-content merge-modal-content glass">
+      <button class="modal-close" onclick="closeMergeModal()">&times;</button>
+      <div class="login-decor">🔄</div>
+      <h2 class="cinzel-title">Merge Super Admin</h2>
+      <p class="modal-subtitle">Integrate your initial user profile with one of the imported family members to avoid duplicates and preserve connections.</p>
+
+      <div class="form-section">
+        <h4 style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+          <i data-lucide="user-check" style="width: 16px; height: 16px; color: var(--accent-color);"></i>
+          Current Starting Profile (You)
+        </h4>
+        <div style="display: flex; align-items: center; gap: 14px; background-color: rgba(255,255,255,0.02); padding: 12px 16px; border-radius: 12px; border: 1px solid var(--border-color);">
+          <div id="merge-current-avatar" style="font-size: 28px; width: 48px; height: 48px; border-radius: 50%; background: var(--bg-tertiary); display: flex; align-items: center; justify-content: center;">👤</div>
+          <div>
+            <div id="merge-current-name" style="font-weight: 700; font-size: 15px;">John Doe</div>
+            <div id="merge-current-details" class="color-dim font-size-12">Super Admin</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group margin-top-16">
+        <label for="merge-target-select">Select matching individual from imported XLSX:</label>
+        <p class="font-size-11 color-dim margin-bottom-8">We found these potential matches based on name similarity. You can select any imported member to merge your profile into theirs.</p>
+        
+        <select id="merge-target-select" class="form-control" style="width: 100%; padding: 10px; border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-color);">
+          <!-- Populated dynamically via JS -->
+        </select>
+      </div>
+
+      <div class="form-actions" style="margin-top: 24px; display: flex; gap: 12px;">
+        <button type="button" class="btn btn-secondary" onclick="handleSkipMerge()" style="width: 100%;">Keep as Separate Member</button>
+        <button type="button" class="btn btn-primary btn-glow" onclick="executeMerge()" style="width: 100%;">Merge Profiles <i data-lucide="git-merge"></i></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================= -->
+  <!-- MODAL: iOS PWA INSTALLATION GUIDE -->
+  <!-- ================================================================= -->
+  <div id="ios-install-modal" class="modal hidden" onclick="closeIosInstallModal()">
+    <div class="modal-content ios-modal-content glass" onclick="event.stopPropagation()">
+      <button class="modal-close" onclick="closeIosInstallModal()">&times;</button>
+      <div class="ios-decor">📱</div>
+      <h2 class="cinzel-title">Install Companion App</h2>
+      <p class="modal-subtitle">Add YoyoVayo! to your Home Screen for a faster, full-screen, native experience.</p>
+      
+      <div class="ios-steps">
+        <div class="ios-step">
+          <div class="ios-step-number">1</div>
+          <div class="ios-step-text">
+            Tap the <strong>Share</strong> button <span class="ios-highlight-btn"><i data-lucide="share" class="ios-inline-icon"></i></span> at the bottom (iPhone) or top (iPad) of Safari.
+          </div>
+        </div>
+        
+        <div class="ios-arrow-connector">
+          <i data-lucide="chevron-down"></i>
+        </div>
+        
+        <div class="ios-step">
+          <div class="ios-step-number">2</div>
+          <div class="ios-step-text">
+            Scroll down the share sheet and select <strong>Add to Home Screen</strong> <span class="ios-highlight-btn"><i data-lucide="plus-square" class="ios-inline-icon"></i></span>.
+          </div>
+        </div>
+        
+        <div class="ios-arrow-connector">
+          <i data-lucide="chevron-down"></i>
+        </div>
+        
+        <div class="ios-step">
+          <div class="ios-step-number">3</div>
+          <div class="ios-step-text">
+            Tap <strong>Add</strong> in the top-right corner of the confirmation screen.
+          </div>
+        </div>
+      </div>
+      
+      <div class="ios-tip-box">
+        <div class="ios-tip-icon">✨</div>
+        <div class="ios-tip-text">
+          Once added, open YoyoVayo! from your Home Screen to enjoy offline access, smoother tree interactions, and immersive full-screen display.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOAD THE JAVASCRIPT CONTROLLERS (Order is important: Core app, visual celebrations, rendering tree) -->
+  <script src="app.js"></script>
+  <script src="celebration.js"></script>
+  <script src="tree.js"></script>
+  <script>
+    if ('serviceWorker' in navigator && window.location.protocol !== 'file:') {
+      window.addEventListener('load', () => {
+        // Register standard service-worker.js
+        navigator.serviceWorker.register('service-worker.js')
+          .then((reg) => {
+            console.log('YoyoVayo! Service Worker registered with scope:', reg.scope);
+            
+            // Detect updates and monitor installations
+            reg.addEventListener('updatefound', () => {
+              const installingWorker = reg.installing;
+              if (installingWorker) {
+                installingWorker.addEventListener('statechange', () => {
+                  if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    console.log('New update available. Refreshing...');
+                  }
+                });
+              }
+            });
+          })
+          .catch((err) => console.error('YoyoVayo! Service Worker registration failed:', err));
+
+        // Automatically reload the page when the service worker finishes updating and claims control
+        let refreshing = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (!refreshing) {
+            refreshing = true;
+            window.location.reload();
+          }
+        });
+      });
+    }
+  </script>
+</body>
+</html>
